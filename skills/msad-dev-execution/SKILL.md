@@ -72,9 +72,9 @@ State at start:
 State after each:
 > Package `<i>`/`<N>` done — `<repo>` `<task-id>`. Tests: `<pass/fail>`.
 
-## Step 3: Test Suite (Docker-Based)
+## Step 3: Test Suite (Docker-Based) with Coverage Validation
 
-For each work package's repo, run the standard test suite with Docker for all service dependencies:
+For each work package's repo, run the standard test suite with Docker for all service dependencies, then validate coverage.
 
 ### Go Repos (ddi.dns.config, ddi.cloud.proxy.middleware, ddi.msad.collector, ddi.msadconnect.proxy)
 
@@ -85,23 +85,75 @@ make test                       # runs tests against docker services
 docker-compose down             # cleanup
 ```
 
+**Coverage check (required):**
+```bash
+docker-compose up -d
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out | grep total         # see overall %
+go tool cover -html=coverage.out                      # visual report
+docker-compose down
+```
+
+**Thresholds:**
+- **Overall:** ≥75% (Go)
+- **New/changed files:** ≥80%
+- **Report:** per-file breakdown; flag any file below threshold
+
+**Race detection (required for concurrent code):**
+```bash
+docker-compose up -d
+go test -race ./...              # for middleware, collector, interceptor code
+docker-compose down
+```
+If race detector finds a data race, stop and hand back to agent: "Race detected in [function]. Fix and re-test with `-race`."
+
+**Performance profiling (if latency-sensitive code changed):**
+```bash
+# CPU profile: zone creation, interceptor, error-code mapping
+docker-compose up -d
+go test -cpuprofile=cpu.prof -memprofile=mem.prof -run TestZoneCreate ./...
+go tool pprof -http=:8080 cpu.prof
+docker-compose down
+```
+Report: "Profiling shows [top functions]. No regressions detected." Or if regression: escalate to user with findings.
+
 **Failure handling:**
 - If PostgreSQL fails to start, check `docker-compose logs postgres` for errors. Common: port 5432 in use — run `docker-compose down && docker-compose up -d`.
 - If tests hang on DB connection, add explicit wait: `docker-compose up -d && sleep 5 && make test`.
+- If coverage is below threshold: **do not proceed**. Hand back to agent with: "Coverage is XY%; need ≥75% overall, ≥80% for new code. Add integration tests to cover the gap."
+
+### Integration Tests (When Required)
+
+Integration tests are **mandatory** when changes cross service/layer boundaries:
+
+**Trigger cases:**
+- DB schema changes (new columns, new tables)
+- gRPC service changes (new methods, request/response changes)
+- Error-code mapping changes (new error codes added/changed)
+- Proto changes (collector or agent protos)
+- Request/response transformation (middleware interceptor changes)
+
+**Pattern:**
+1. Start docker stack (postgres, mocked downstream services)
+2. Drive full flow through the changed code path
+3. Assert on results at multiple stages: request validation → service call → DB write → response
+4. Example: zone creation with replication scope → validate request → gRPC call → collector response → DB read → assert scope persisted
+
+**Tools:** sqlmock for DB context, gomock for gRPC/interface mocks, existing test fixtures in the repo.
 
 ### C# Agent (ddi.msad.agent)
 
 ```bash
 # Windows-only. Local testing not possible on Mac.
 # This runs on Windows CI: jenkins windows_node_ddi_msad_agent_label
-# For now, unit-test verification via code review is the gate.
+# Coverage is checked by Windows CI before merge.
 dotnet test MSADAgent\Agent.Tests\Agent.Tests.csproj  # for documentation; won't run on Mac
 ```
 
 **State:**
-> Tests: unit `<pass/fail>`, integration `<pass/fail/n/a>`. Services via Docker ✓
+> Tests: unit `<pass/fail>`, integration `<pass/fail/required>`. Coverage: `<X>%` (threshold: ≥75%). Services via Docker ✓
 
-Stop and surface if any test fails that wasn't caught by the agent. Fix or hand back to the agent for a second attempt.
+Stop and surface if any test fails that wasn't caught by the agent. Fix or hand back to the agent for a second attempt. **Do not proceed if coverage is below threshold without explicit justification.**
 
 ## Step 4: Validation Loop (Bounded)
 

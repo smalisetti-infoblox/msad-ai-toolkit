@@ -128,6 +128,16 @@ docker-compose up -d            # start PostgreSQL and other services
 make test                       # runs gofmt check, then go test ./...
 docker-compose down
 
+# Race detection (optional, recommended for concurrent code)
+docker-compose up -d
+go test -race ./...
+docker-compose down
+
+# Profiling (when performance investigation needed)
+go test -cpuprofile=cpu.prof -memprofile=mem.prof ./...
+go tool pprof cpu.prof          # interactive CPU profile analysis
+go tool pprof mem.prof          # interactive memory profile analysis
+
 # Lint
 golangci-lint run ./...         # via CI workflow
 ```
@@ -142,6 +152,15 @@ make vendor
 docker-compose up -d
 make test
 docker-compose down
+
+# Race detection (recommended for interceptor & middleware code)
+docker-compose up -d
+go test -race ./...
+docker-compose down
+
+# Profiling (when investigating latency or memory issues)
+go test -cpuprofile=cpu.prof -memprofile=mem.prof ./...
+go tool pprof cpu.prof
 
 # Lint
 golangci-lint run ./...
@@ -158,6 +177,15 @@ docker-compose up -d
 make test                       # runs fmt-atlas, then go test with flags
 docker-compose down
 
+# Race detection (critical for gRPC service code)
+docker-compose up -d
+go test -race ./...
+docker-compose down
+
+# Profiling (when investigating gRPC request latency)
+go test -cpuprofile=cpu.prof -memprofile=mem.prof ./...
+go tool pprof -http=:8080 cpu.prof   # web UI for profile visualization
+
 # Lint
 golangci-lint run --timeout=10m --verbose --new-issues-only
 nilaway ./...                   # nil-safety static analysis (CI only on changed files)
@@ -172,12 +200,80 @@ dotnet build MSADAgent\MSADAgent.sln -c Debug
 # Test (local on Windows only)
 dotnet test MSADAgent\Agent.Tests\Agent.Tests.csproj
 
+# Coverage (Windows only)
+dotnet test --collect:"XPlat Code Coverage"
+
 # OR via build script
 .\build_project.bat             # full build + MSI packaging (requires WiX 3.14)
 
 # CI: Jenkins windows_node_ddi_msad_agent_label
-# Runs: dotnet test MSADAgent\Agent.Tests\Agent.Tests.csproj
+# Runs: dotnet test MSADAgent\Agent.Tests\Agent.Tests.csproj (with coverage)
 ```
+
+---
+
+## Coverage & Integration Testing Requirements
+
+### Coverage Thresholds (Non-Negotiable)
+
+| Stack | Overall | New Code | Exempt Paths |
+|---|---|---|---|
+| **Go** (all repos) | ≥75% | ≥80% | None (but integration tests can cover gaps) |
+| **C#** (ddi.msad.agent) | ≥70% | ≥75% | Windows-only cmdlet wrappers (must be flagged in PR) |
+
+**How to measure & report:**
+
+Go:
+```bash
+docker-compose up -d
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out    # per-function breakdown
+go tool cover -html=coverage.out    # open in browser for visual
+docker-compose down
+```
+
+Report: "Overall coverage: XY%. New files: [list with %]. Files below threshold: [list with %; add integration tests to fix]."
+
+C#:
+```bash
+dotnet test --collect:"XPlat Code Coverage"
+# Coverage % shown in test result summary
+```
+
+### Integration Tests (When Mandatory)
+
+Integration tests are **required** (not optional) when:
+
+1. **DB schema changes** — new columns, constraints, or queries. Test: schema migration runs, data persists across restarts, queries return correct results.
+2. **gRPC service changes** — new methods, request/response shape, error handling. Test: client builds correct request, server processes it, response matches contract.
+3. **Error-code mapping changes** — new error codes or status mappings. Test: agent error → collector GetErrorCode() → ErrorCodeToStatus() → correct gRPC status.
+4. **Proto changes** — collector or agent protos. Test: generated code compiles, contract respected by both sides.
+5. **Middleware interceptor changes** — request/response transformation. Test: request routed correctly, interceptor transforms it, downstream service receives expected shape.
+6. **Replication-scope validation changes** — new scope values, new validation rules. Test: zone create with each scope value, validator accepts/rejects correctly, DB stores scope.
+
+**Pattern:**
+```bash
+# 1. Start full stack
+docker-compose up -d
+
+# 2. Run integration test (not just unit test)
+# Example: drive zone creation through middleware → collector → DB
+make test
+
+# 3. Assert at multiple stages
+# - Request validation passed
+# - gRPC call succeeded
+# - Collector response mapped to DB
+# - Zone exists in DB with correct replication-scope
+# - Retry/idempotency works
+
+docker-compose down
+```
+
+**Red flags (escalate to user):**
+- Change spans multiple repos (collector proto + middleware consumer) → integration test mandatory in both repos
+- Change involves zone creation/update flow → include full-path integration test (API → middleware → collector → DB)
+- Coverage drops below threshold without integration tests → surface and ask for integration tests, not just unit tests
 
 ---
 

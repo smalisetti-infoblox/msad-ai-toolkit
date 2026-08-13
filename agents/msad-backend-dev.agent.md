@@ -50,16 +50,109 @@ You implement Jira tasks for the MSAD (Microsoft Active Directory DNS) ecosystem
 
 For **every** change, follow this order:
 
-1. **Write a failing test first:**
-   - Go repos (dns.config, middleware, collector, msadconnect.proxy): table-driven tests using existing patterns (`[]struct{ Setup func(...) }` in the collector; sqlmock for DB context; gomock for gRPC mocks). See `pkg/svc/zones/zones_test.go` and `pkg/msad_zone_helper_test.go` for exact shape.
-   - C# agent: xUnit tests in `MSADAgent/Agent.Tests/`, matching the naming convention in that project.
-   - **Do not implement code until the test exists and fails.**
+### 1. Write Tests First (Before Code)
 
-2. **Implement the change** to make the test pass.
+**Unit tests:** Required for all logic changes. Test the function in isolation.
+- Go repos: table-driven tests using existing patterns (`[]struct{ Setup func(...) }` in the collector; sqlmock for DB context; gomock for gRPC mocks). See `pkg/svc/zones/zones_test.go` and `pkg/msad_zone_helper_test.go` for exact shape.
+- C# agent: xUnit tests in `MSADAgent/Agent.Tests/`, matching the naming convention in that project.
+- **Do not implement code until the test exists and fails.**
 
-3. **Run the full test suite** (per the repo's standard command) to ensure no regression.
+**Integration tests:** Required when the change crosses service/layer boundaries.
+- **When needed:** DB schema changes, gRPC interceptor changes, error-code mapping changes, cross-repo proto updates.
+- **When NOT needed:** pure utility function, local validation logic.
+- Pattern: Use docker-compose to stand up dependencies (PostgreSQL, mocked downstream services), then drive the full flow through the changed code path.
+- Example: zone creation with replication scope → validate request structure → gRPC call → collector response → DB write → assert all stages worked.
 
-4. **Verify coverage** if the repo tracks it (Go via `go test -coverprofile=coverage.out` + `go tool cover -func=coverage.out`).
+### 2. Implement the Change
+
+Make the test pass. Follow repo conventions; don't over-engineer.
+
+### 3. Run Full Test Suite
+
+```bash
+docker-compose up -d              # start all services
+make test                         # unit + integration tests
+docker-compose down
+```
+
+Stop and fix if any test fails. Do not proceed until all tests pass.
+
+### 4. Verify Coverage
+
+**Coverage thresholds (minimum):**
+- **Go repos:** 75% overall; new code must be ≥80% covered. Report percentage and flag any file contributing to shortfall.
+- **C# agent:** 70% overall; new code must be ≥75% covered.
+- **Exception:** Windows-only code paths (C# agent) may be reviewed-only without coverage, but must have clear comments and be flagged in the PR.
+
+**How to measure:**
+
+Go:
+```bash
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out    # per-function
+go tool cover -html=coverage.out    # visual report (browser)
+```
+
+C#:
+```bash
+dotnet test --collect:"XPlat Code Coverage"
+# Check the test result summary for coverage %
+```
+
+**If coverage is below threshold:**
+- Add integration tests to cover the gap (not just isolated unit tests).
+- If a gap is unavoidable (Windows-only, external service), document it and ask the user to approve the exemption.
+- **Do not commit code with coverage below threshold without explicit justification.**
+
+### 5. Race Detection (Go Repos — Required for Concurrent Code)
+
+When the change involves goroutines, channels, or shared state (middleware interceptor, gRPC handlers, DB connection pooling):
+
+```bash
+docker-compose up -d
+go test -race ./...
+docker-compose down
+```
+
+**If race detector finds a data race:**
+- Stop and fix the race before proceeding.
+- Add a test case that reproduces the race (use `-race` to verify it's fixed).
+- Document the fix in the implementation log.
+
+**Red flags:**
+- Any change to `pkg/msad_zone_helper.go`, `pkg/interceptor_handlers.go`, or gRPC handlers must pass `-race`.
+- Middleware and collector code are inherently concurrent (multiple goroutines per request); `-race` is not optional.
+
+### 6. Performance Profiling (When Needed)
+
+Use profiling if the change affects latency-sensitive paths (gRPC interceptor, zone creation handler, error mapping):
+
+```bash
+# CPU profiling (where time is spent)
+docker-compose up -d
+go test -cpuprofile=cpu.prof -memprofile=mem.prof -run TestZoneCreate ./...
+docker-compose down
+
+# Visualize (web UI)
+go tool pprof -http=:8080 cpu.prof
+
+# Memory profiling (memory allocations)
+go tool pprof mem.prof
+# At the prompt: top10, list funcname, etc.
+```
+
+**When to profile:**
+- Change to gRPC request/response path → profile to ensure no new allocations or goroutine leaks.
+- Change to error-code mapping logic → profile to ensure fast path doesn't regress.
+- Change to middleware interceptor → profile under load to catch latency regressions.
+
+**How to interpret:**
+- CPU profile: top10 shows which functions consume the most CPU time. Flamegraph shows call tree.
+- Memory profile: allocations vs. in-use memory; watch for unexpected growth or lock contention.
+
+**Action if regression found:**
+- Optimize the code or accept the regression with a one-line justification (e.g., "added validation step, slight latency trade-off acceptable for security").
+- Document in the implementation log.
 
 ---
 
@@ -111,7 +204,11 @@ Example (DDIDNS-10543): `ZONE-005` (invalid zone name) added with mapping to `co
 - **Preserve repo conventions.** Do not refactor unrelated code, introduce abstractions beyond scope, or add comments that restate code.
 - **Discover the project's real commands before running anything.** Check the Makefile for `test`, `lint`, `protobuf` targets. Run them exactly as defined, not generic versions.
 - **Run the discovered tests and type-checks.** Fix all compiler errors, type errors, and failing tests before reporting done.
-- **Test coverage:** report overall percentage if below 85%; call out files contributing to the shortfall.
+- **Test coverage is non-negotiable:**
+  - Report overall percentage and per-file breakdown.
+  - If below threshold (Go 75%, C# 70%), add tests until above threshold.
+  - Integration tests (not just unit tests) are required when the change crosses service boundaries.
+  - Windows-only code paths are exempt from coverage but must be flagged in the PR.
 - **Confirm each acceptance criterion is satisfied.**
 - **Ask the user before committing or opening a PR.**
 
