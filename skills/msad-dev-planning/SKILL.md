@@ -140,7 +140,7 @@ Ask only what can't be answered from Jira, the repo, or linked tickets. If the a
 
 **Red flag:** If you can't determine which repos are involved, or if the task is silent on replication-scope constraints (creation vs. update), ask explicitly.
 
-## Step 7 — Write Plan
+## Step 7 — Write Plan & Self-Critique
 
 Plan file template (mandatory sections):
 
@@ -264,28 +264,55 @@ created: YYYY-MM-DD
 Once approved, invoke `/msad-dev-execution <plan-path>` to implement.
 ```
 
+## Step 7b — Plan Auto-Review (Mandatory)
+
+After writing the plan and before Step 8, dispatch a **fresh-context reviewer agent** to audit the plan independently. The reviewer is **advisory only** — it surfaces gaps for the user to decide on, never blocks the approval gate.
+
+1. **Dispatch a new Claude Code agent** (not this skill, a fresh agent) with the prompt template from `references/plan-reviewer-prompt.md`.
+   - Pass: plan file path, Jira ID, list of affected repos.
+   - Expected output: Markdown report with findings (gaps, unclear steps, assumptions, risks).
+
+2. **Reviewer scope:** check for:
+   - [ ] Per-repo work packages are correctly scoped (no massive "todo" tasks)
+   - [ ] Cross-repo dependencies are explicitly called out (proto, validator sync, error-code additions)
+   - [ ] Acceptance criteria are clearly mapped to implementation steps
+   - [ ] Risk section is realistic (Windows testing gaps, cross-repo coordination, scope creep)
+   - [ ] Assumptions are clearly stated and justified (not silent)
+   - [ ] Questions are either answered or marked Blocking
+
+3. **Surface the reviewer's output verbatim** to the user in Step 8 alongside the plan.
+
+The value: a fresh-context reviewer catches gaps that self-critique by the same model that wrote the plan tends to miss. If the reviewer surfaces Blocking issues, you can revise (Step 7 → Step 8 loop) before presenting to the user.
+
+---
+
 ## Step 8 — User Approval Gate
 
 **HARD STOP.** Do not implement code until the user approves the plan.
 
-Present the plan to the user with the question:
+Present to the user:
 
-> "This plan proposes `<N>` work packages across `<repos>`. Proceed with implementation? (Approve / Approve with edits / Reject)"
+1. **The plan file** (full contents)
+2. **The plan auto-reviewer's output** (findings, gaps, risks — verbatim)
+3. **Approval question:**
+
+> "This plan proposes `<N>` work packages across `<repos>`. Auto-review surfaced `<F>` findings (see below). Proceed with implementation, revise, or reject? (Approve / Approve with edits / Reject)"
 
 Four possible responses:
 
 1. **Approve as-is** — stamp `status: approved` in frontmatter; tell the user to invoke `/msad-dev-execution <plan-path>`.
-2. **Approve with edits** — revise per feedback, re-present at Step 8.
+2. **Approve with edits** — revise per feedback, re-run self-critique + auto-review, re-present.
 3. **Reject** — return to Step 6 (or Step 4 if scope changed).
 4. **Silence** is NOT approval. If response is ambiguous, ask explicitly.
 
 ## Anti-Patterns
 
-- Don't skip any step 1–7 before presenting to the user.
+- Don't skip any step 1–7 before auto-review. Step 7b (auto-review) is mandatory.
+- Don't skip Step 8 (user approval). Plans are gated; implementation doesn't start without explicit approval.
 - Don't assume a task is independent if replication-scope validation is in scope — that's a cross-repo sync point.
 - Don't forget Windows testing constraints for agent changes.
 - Don't silently assume "proto change required" — check the task description first.
-- Don't let the user skip the approval gate. Step 8 is mandatory.
+- Don't let the auto-reviewer block the plan. Reviewer is advisory; user decides on Blocking issues.
 
 ## Error Handling
 
