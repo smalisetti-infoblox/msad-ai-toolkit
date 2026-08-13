@@ -29,17 +29,32 @@ See `references/repo-topology.md` "Dependency Repos" for how to discover and tra
 
 ---
 
+## Organization & Fork Pattern
+
+**All repos live in the [Infoblox-CTO](https://github.com/Infoblox-CTO) organization.**
+
+This toolkit uses a **fork-based contribution model**:
+- Clone repos from **Infoblox-CTO** (canonical)
+- Push changes to your **personal fork**
+- Open PRs to **Infoblox-CTO/main**
+
+See **[CLAUDE.md](CLAUDE.md)** for setup instructions and **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full workflow.
+
+---
+
 ## Installation
 
 ### Option 1: Add as Claude Code Plugin (Recommended)
 
 ```bash
-# Clone the repo
-git clone <this-repo> ~/msad-ai-toolkit
+# Clone the toolkit
+git clone https://github.com/Infoblox-CTO/msad-ai-toolkit.git ~/msad-ai-toolkit
 
 # In Claude Code: Settings → Plugins → Add Local Plugin
 # Path: ~/msad-ai-toolkit
 ```
+
+**First Time?** Follow [CLAUDE.md](CLAUDE.md) to fork and configure the five MSAD repos.
 
 ### Option 2: Symlink into ~/.claude/
 
