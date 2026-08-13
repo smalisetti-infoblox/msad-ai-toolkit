@@ -105,14 +105,28 @@ Key service for this epic: **Zones** (methods: Create, Update, Delete, List, Get
 
 ## Build / Test / Lint Commands
 
+### Setup: Docker for All Services
+
+All repos with PostgreSQL or other services run them via Docker. **Do not install PostgreSQL locally.**
+
+```bash
+# Standard pattern for any repo needing services:
+cd <repo>
+docker-compose up -d            # start PostgreSQL, Redis, etc.
+make test                       # tests assume services are running
+docker-compose down             # cleanup
+```
+
 ### ddi.dns.config (Go)
 
 ```bash
 # Vendor management
 make vendor                     # go mod tidy + download
 
-# Test
+# Test (requires docker-compose)
+docker-compose up -d            # start PostgreSQL and other services
 make test                       # runs gofmt check, then go test ./...
+docker-compose down
 
 # Lint
 golangci-lint run ./...         # via CI workflow
@@ -124,8 +138,10 @@ golangci-lint run ./...         # via CI workflow
 # Vendor management
 make vendor
 
-# Test
+# Test (requires docker-compose)
+docker-compose up -d
 make test
+docker-compose down
 
 # Lint
 golangci-lint run ./...
@@ -137,8 +153,10 @@ golangci-lint run ./...
 # Vendor management
 make vendor
 
-# Test
+# Test (requires docker-compose)
+docker-compose up -d
 make test                       # runs fmt-atlas, then go test with flags
+docker-compose down
 
 # Lint
 golangci-lint run --timeout=10m --verbose --new-issues-only

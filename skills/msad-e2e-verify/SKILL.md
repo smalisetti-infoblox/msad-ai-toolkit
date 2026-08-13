@@ -51,41 +51,55 @@ For **faster collector-only checks** without bringing up the full WAPI v3 + midd
 ## Prerequisites
 
 1. **Local repos cloned:** `~/ddi.dns.config` and `~/ddi.cloud.proxy.middleware` (middleware is a library, included as a dependency in dns.config).
-2. **Docker:** dns.config service and test stack can be brought up via Docker / docker-compose.
+2. **Docker + docker-compose:** for PostgreSQL, Redis, and the dns.config service. Do NOT install PostgreSQL locally.
 3. **Tools:** curl (or newman for Postman collections), jq, git, make.
 
 ---
 
 ## Process
 
-### Step 1: Setup
+### Step 1: Setup (Docker-Based)
 
-1. **Bring up the dns.config service:**
+1. **Start all dependencies via docker-compose:**
    ```bash
    cd ~/ddi.dns.config
-   make docker                    # builds the image
-   docker-compose up -d           # starts service, db, etc.
+   docker-compose up -d           # starts PostgreSQL, Redis, service, etc.
    ```
-   Confirm the service is ready:
+   Wait a few seconds for services to become healthy:
+   ```bash
+   sleep 5 && docker-compose logs postgres | tail -5
+   ```
+
+2. **Confirm the dns.config service is running:**
    ```bash
    curl -s http://localhost:8080/health | jq .
+   # Expected: {"status": "healthy"} or similar
+   ```
+   If the service fails to start, check logs:
+   ```bash
+   docker-compose logs dns-config  # or whatever the service is named in docker-compose.yml
    ```
 
-2. **Identify the WAPI v3 endpoint** (usually `http://localhost:8080/api/v3/...` or similar — check the Makefile/docker-compose for port binding).
+3. **Identify the WAPI v3 endpoint** (usually `http://localhost:8080/api/v3/...` — check the docker-compose.yml or Makefile for exact port).
 
-3. **Provision a test account/view/JWT** (the existing `k6/` scripts in dns.config have fixtures for this; reuse them or create a new one):
+4. **Provision a test account/view/JWT** (the existing `k6/` or test fixtures in dns.config should populate these automatically; if not, use curl to create):
    ```bash
-   # Pseudo-code; exact commands depend on dns.config's test setup
-   JWT=$(curl -s -X POST http://localhost:8080/auth/login -d '...' | jq -r .token)
+   # Example (adjust to your auth scheme):
+   JWT=$(curl -s -X POST http://localhost:8080/auth/login -d '{"user":"test","pass":"test"}' | jq -r .token)
    ACCOUNT_ID=$(curl -s -H "Authorization: Bearer $JWT" http://localhost:8080/api/v3/accounts | jq -r '.[] | select(.name == "test-account") | .id')
    VIEW_ID=$(curl -s -H "Authorization: Bearer $JWT" http://localhost:8080/api/v3/views | jq -r '.[] | select(.name == "test-view") | .id')
    ```
 
-4. **Verify the middleware's mocked MSAD collector is enabled:**
+5. **Verify the middleware's mocked MSAD collector is enabled:**
    Check `ddi.cloud.proxy.middleware/pkg/interceptor_handlers.go` or `main.go` (in dns.config's integration context) — the `CloudProxyHandler` should be wired to use the `MockCloudProxyClient` from `pkg/mocks` when running in test mode, not dialing a real remote service.
 
+**Cleanup after testing:**
+```bash
+docker-compose down             # stops and removes containers
+```
+
 State:
-> Step 1 — Setup complete. dns.config running at `<endpoint>`. Test account: `<account-id>`, view: `<view-id>`.
+> Step 1 — Setup complete. dns.config running at `<endpoint>`. PostgreSQL running in container. Test account: `<account-id>`, view: `<view-id>`.
 
 ### Step 2: Test Cases
 

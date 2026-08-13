@@ -72,17 +72,36 @@ State at start:
 State after each:
 > Package `<i>`/`<N>` done — `<repo>` `<task-id>`. Tests: `<pass/fail>`.
 
-## Step 3: Test Suite
+## Step 3: Test Suite (Docker-Based)
 
-For each work package's repo, run the standard test suite:
+For each work package's repo, run the standard test suite with Docker for all service dependencies:
 
-- **Go repos:** `make test` or `go test ./...` (per Makefile)
-- **C# agent:** `dotnet test MSADAgent\Agent.Tests\Agent.Tests.csproj`
+### Go Repos (ddi.dns.config, ddi.cloud.proxy.middleware, ddi.msad.collector, ddi.msadconnect.proxy)
+
+```bash
+cd <repo>
+docker-compose up -d            # starts PostgreSQL, Redis, etc. — do NOT use local database
+make test                       # runs tests against docker services
+docker-compose down             # cleanup
+```
+
+**Failure handling:**
+- If PostgreSQL fails to start, check `docker-compose logs postgres` for errors. Common: port 5432 in use — run `docker-compose down && docker-compose up -d`.
+- If tests hang on DB connection, add explicit wait: `docker-compose up -d && sleep 5 && make test`.
+
+### C# Agent (ddi.msad.agent)
+
+```bash
+# Windows-only. Local testing not possible on Mac.
+# This runs on Windows CI: jenkins windows_node_ddi_msad_agent_label
+# For now, unit-test verification via code review is the gate.
+dotnet test MSADAgent\Agent.Tests\Agent.Tests.csproj  # for documentation; won't run on Mac
+```
+
+**State:**
+> Tests: unit `<pass/fail>`, integration `<pass/fail/n/a>`. Services via Docker ✓
 
 Stop and surface if any test fails that wasn't caught by the agent. Fix or hand back to the agent for a second attempt.
-
-State:
-> Tests: unit `<pass/fail>`, integration `<pass/fail/n/a>`.
 
 ## Step 4: Validation Loop (Bounded)
 

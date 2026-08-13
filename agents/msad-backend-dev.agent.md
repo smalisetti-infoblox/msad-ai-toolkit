@@ -135,10 +135,38 @@ Any scope string used in a cmdlet argument must be validated against a hardcoded
 
 ## Local Verification & Environment
 
-- **Set up the environment before verifying.** Check the repo's Makefile, docker-compose files, or README for how the service runs locally.
-- **For ddi.msad.collector:** in addition to the standard `make test` suite, use `cmd/testclient` (documented in `references/repo-topology.md`) for fast gRPC-level manual checks (e.g., zone create with replication scope, error-code mapping). Saves time when testing proto-level changes or error handling before full e2e.
-- **For ddi.msad.agent (Windows-only):** acknowledge that you cannot run tests locally on Mac. Point at the Jenkins CI path (`windows_node_ddi_msad_agent_label`) as the real verification gate. Changes to the agent are code-reviewed and merged, then verified by CI before landing.
-- **For Go repos:** Docker/local services are usually available. Spin up the stack before integration checks.
+**All service dependencies run via Docker.** Do not expect or require local installations of PostgreSQL, Redis, or other databases.
+
+### Setup Pattern
+
+1. **Check the repo's docker-compose.yml** for service definitions (PostgreSQL, Redis, etc.). If not present, check the Makefile for `docker` or `docker-compose` targets.
+2. **Bring up the stack before running tests:**
+   ```bash
+   cd <repo>
+   docker-compose up -d                 # starts all services (PostgreSQL, etc.)
+   make test                            # runs tests (assumes services are running)
+   docker-compose down                  # cleanup after
+   ```
+3. **Wait for services to be healthy.** PostgreSQL takes a few seconds; add a health check if needed:
+   ```bash
+   docker-compose exec postgres psql -U postgres -c "SELECT 1" 2>/dev/null
+   # or wait 5s and proceed if postgres is in docker-compose
+   ```
+
+### Per-Repo Testing
+
+- **ddi.dns.config, ddi.cloud.proxy.middleware, ddi.msad.collector:** all use PostgreSQL (via docker-compose). Run `make test` which assumes the stack is up.
+- **ddi.msadconnect.proxy:** check Makefile for service dependencies; if PostgreSQL or Redis needed, use docker-compose.
+- **ddi.msad.collector:** in addition to the standard `make test` suite, use `cmd/testclient` (documented in `references/repo-topology.md`) for fast gRPC-level manual checks (e.g., zone create with replication scope, error-code mapping). Brings up its own docker stack if needed.
+- **ddi.msad.agent (Windows-only):** acknowledge that you cannot run tests locally on Mac. Point at the Jenkins CI path (`windows_node_ddi_msad_agent_label`) as the real verification gate. Changes to the agent are code-reviewed and merged, then verified by CI before landing.
+
+### Failure Handling
+
+- **If PostgreSQL fails to start:** check `docker-compose logs postgres` for errors. Common issues: port 5432 already in use (kill existing container: `docker-compose down`), or disk full.
+- **If a test hangs on DB connection:** ensure `docker-compose up -d` completed successfully and postgres is healthy. Add explicit wait:
+  ```bash
+  docker-compose up -d && sleep 5 && make test
+  ```
 - **If credentials or tokens are needed,** state exactly which one and that it may expire — ask the user to provide or refresh it rather than guessing.
 - **Don't claim verification you couldn't perform.** If you couldn't run an integration check because the stack or a credential was unavailable, say so explicitly and list what's needed.
 
