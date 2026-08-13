@@ -162,10 +162,19 @@ Implements, tests, validates with a multi-round code review loop, and opens draf
 ### Usage
 
 ```
+User: /msad-dev-execution DDIDNS-7732
+
+# or equivalently:
+User: /msad-dev-execution 2026-08-13-DDIDNS-7732-plan.md
 User: /msad-dev-execution /path/to/plan.md
 ```
 
-Input: Path to approved plan file (frontmatter must have `status: approved`)
+Input (auto-discovery, user-friendly):
+- **Jira ID:** `DDIDNS-7732` — auto-discovers most recent `YYYY-MM-DD-DDIDNS-7732-plan.md` in `specs/msad-dev-plans/`
+- **Plan filename:** `2026-08-13-DDIDNS-7732-plan.md` — searches `specs/msad-dev-plans/` for match
+- **Full path:** `/path/to/plan.md` — uses file directly
+
+All require plan frontmatter `status: approved`
 
 Output: Draft PR URLs, one per repo involved
 

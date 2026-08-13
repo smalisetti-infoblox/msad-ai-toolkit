@@ -13,7 +13,10 @@ Reads an approved plan file and runs it end-to-end: implementation → bounded r
 
 ## Inputs
 
-- **plan_path** (required): Absolute path to a plan file with `status: approved` in frontmatter.
+- **plan_identifier** (required): One of:
+  - **Full path:** `/path/to/plan.md` (absolute path to approved plan file)
+  - **Jira ID:** `DDIDNS-7732` (auto-discovers most recent `YYYY-MM-DD-DDIDNS-7732-plan.md` in `specs/msad-dev-plans/`)
+  - **Plan name only:** `2026-08-13-DDIDNS-7732-plan.md` (searches `specs/msad-dev-plans/` for exact match)
 
 ## Process Overview
 
@@ -37,10 +40,19 @@ Open draft PR per repo
 Done
 ```
 
-## Step 1: Verify
+## Step 1: Resolve & Verify
 
-1. Read the plan file. Parse frontmatter.
-2. Refuse to proceed unless `status: approved`. Tell the user to run `/msad-dev-planning <plan-path>` to approve.
+1. **Resolve the plan file path:**
+   - If input is an absolute path (starts with `/`), use it directly
+   - If input is a Jira ID (e.g., `DDIDNS-7732`), search `specs/msad-dev-plans/` for the most recent `YYYY-MM-DD-DDIDNS-7732-plan.md`
+   - If input is a filename (e.g., `2026-08-13-DDIDNS-7732-plan.md`), search `specs/msad-dev-plans/` for exact match
+   - If no plan found, error and ask user for full path or correct Jira ID
+
+2. **Verify the plan file:** Read the plan file and parse frontmatter.
+   - Refuse to proceed unless `status: approved`. Tell the user to run `/msad-dev-planning <jira-id>` to create and approve a plan.
+   - If multiple approved plans exist for the same Jira ID, ask user which one (or use most recent)
+
+3. **Check autonomous flag:** If `autonomous: true`, skip the soft confirmation at Step 12.
 
 ## Step 2: Implementation
 

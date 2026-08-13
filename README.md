@@ -66,7 +66,7 @@ The router will ask questions to understand scope, then suggest:
 
 - **For epics:** `/msad-dev-planning DDIDNS-7732` (plan the epic)
 - **For stories/tasks:** `/msad-dev-planning DDIDNS-10562` (plan the story/task)
-- **For "execute plan X":** `/msad-dev-execution /path/to/plan.md` (run a pre-approved plan)
+- **For "execute plan X":** `/msad-dev-execution DDIDNS-7732` (run a pre-approved plan)
 
 ### Step 3: Run Planning
 
@@ -102,7 +102,7 @@ User: /msad-dev-planning DDIDNS-7732
 Once the plan is approved, invoke the execution skill:
 
 ```
-User: /msad-dev-execution /path/to/plan.md
+User: /msad-dev-execution DDIDNS-7732
 ```
 
 **What the execution skill does:**
@@ -151,7 +151,7 @@ Planning: Here's your plan:
 
 User: Approve
 
-User: /msad-dev-execution /path/to/plan.md
+User: /msad-dev-execution DDIDNS-7732
 [Execution dispatches 4 agents in parallel (independent packages)]
 
 [Agents return with code + test results]
@@ -190,7 +190,7 @@ Planning: Plan for DDIDNS-10519:
 
 User: Approve
 
-User: /msad-dev-execution /path/to/plan.md
+User: /msad-dev-execution DDIDNS-7732
 [Execution dispatches 1 agent]
 
 [Agent writes test first, then implementation]
