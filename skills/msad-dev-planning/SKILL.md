@@ -76,12 +76,14 @@ Produce a structured summary: **fact** (verbatim from Jira), **inference** (deri
 
 ### Questions to Surface
 
-- **Is this ticket part of DDIDNS-7732 (Microsoft DNS zone creation epic)?** If yes, cross-reference to existing work (PRs #507, #508, #511 in middleware; #241 in collector).
+- **Is this ticket part of DDIDNS-7732 (Microsoft DNS zone creation epic)?** If yes, run `gh pr list` (Step 3 below) to discover current related work dynamically, rather than using stale hardcoded PR numbers.
 - **Does this change a replication-scope validator or create a new one?** If yes, flag that mirrors must be updated (dns.config ↔ middleware).
 - **Does this touch a proto file?** If yes, flag that vendored generated code in downstream repos must be regenerated.
 - **Does this involve the Windows agent (ddi.msad.agent)?** If yes, note that local testing is impossible; Windows CI is the verification gate.
 
 ## Step 3 — Repo Context
+
+### Local Git Search
 
 For each involved repo, search for prior similar work:
 
@@ -92,6 +94,23 @@ grep -rn '<keyword>' --include='*.go' --include='*.cs' pkg/ | head -20
 ```
 
 Record: likely files/packages, prior implementations, existing test patterns (table-driven in collector, sqlmock in middleware, xUnit in agent), relevant ADRs/docs.
+
+### Existing PR Discovery
+
+Before writing the plan, discover related open/merged PRs in the affected repos. Use `gh pr list` (see `references/repo-topology.md` "Existing PR Discovery" for exact commands and repo slugs):
+
+```bash
+# Example: search for PRs mentioning the epic ID
+gh pr list --repo Infoblox-CTO/ddi.msad.collector --search "DDIDNS-7732" --limit 15
+gh pr list --repo Infoblox-CTO/ddi.cloud.proxy.middleware --search "DDIDNS-7732" --limit 15
+# ... repeat for all involved repos
+```
+
+Cross-reference any related PRs in the plan's "Context" section (see Step 7 template below) instead of relying on hardcoded PR numbers that go stale.
+
+### Dependency Repo Discovery
+
+If the task involves `ddi.msadconnect.proxy` or `ddi.msad.agent`, apply the dependency-discovery methods from `references/repo-topology.md` "Dependency Repos" section to check whether `atlas.onprem.rpc.server` (proto contract) or `atlas.onprem.common` (go.mod dep) are in scope. Even if no code changes are needed there, surface them in the plan's Context section as "dependency repos in scope" for traceability.
 
 ## Step 4 — Per-Repo Impact
 
@@ -161,8 +180,9 @@ created: YYYY-MM-DD
 ## Context
 
 - **Jira:** ticket link + parent epic + linked tickets
-- **Prior work:** related PRs, commits, existing implementations
+- **Prior work:** related PRs (from `gh pr list`), commits, existing implementations
 - **Repos involved:** `<list>`, each with 1–2 sentence role
+- **Dependency repos in scope:** (if any beyond the five core repos; e.g., atlas.onprem.rpc.server for agent/proxy work)
 - **Constraints:** Windows-only testing? Proto-dependent? Cross-repo validator sync?
 
 ## Per-Repo Work Packages

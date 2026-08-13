@@ -35,6 +35,19 @@ These gaps are verified via:
 
 ---
 
+## Quick Collector-Level Testing via `cmd/testclient` (Alternative)
+
+For **faster collector-only checks** without bringing up the full WAPI v3 + middleware stack, use the MSAD Collector's gRPC test client directly:
+
+**When to use:**
+- Verifying a new replication-scope value or error-code mapping at the collector level
+- Quick gRPC integration check during implementation (before e2e stack tests)
+- Collector-proto changes that need validation before middleware regenerates
+
+**Exact steps:** See `references/repo-topology.md` → "MSAD Collector Test Client (cmd/testclient)" section for setup, invocation examples, and flags.
+
+---
+
 ## Prerequisites
 
 1. **Local repos cloned:** `~/ddi.dns.config` and `~/ddi.cloud.proxy.middleware` (middleware is a library, included as a dependency in dns.config).

@@ -16,6 +16,15 @@ Claude Code custom agent + skills for the MSAD (Microsoft Active Directory DNS) 
 | **ddi.msadconnect.proxy** | Go | Windows RPC/LDAP bridge |
 | **ddi.msad.agent** | C#/.NET 8 | Windows Service; PowerShell zone controllers (Windows-only testing) |
 
+**Dependency Repos (referenced, not owned):**
+
+| Repo | Role |
+|---|---|
+| **atlas.onprem.rpc.server** | Proto-contract dependency of ddi.msadconnect.proxy and ddi.msad.agent (Windows RPC/gRPC dispatcher) |
+| **atlas.onprem.common** | Go module dependency of ddi.msadconnect.proxy (common utilities) |
+
+See `references/repo-topology.md` "Dependency Repos" for how to discover and track additional dependencies.
+
 ---
 
 ## Installation
@@ -274,7 +283,7 @@ See [skills/README.md](skills/README.md) for details on:
 
 ### References
 
-- **[references/repo-topology.md](references/repo-topology.md)** — Shared knowledge (stacks, commands, validators, proto pairs, test patterns)
+- **[references/repo-topology.md](references/repo-topology.md)** — Shared knowledge (stacks, commands, validators, proto pairs, test patterns, dependency repos, PR discovery, collector test client)
 - **[references/plan-reviewer-prompt.md](references/plan-reviewer-prompt.md)** — Template for the auto-reviewer agent (loaded by planning skill)
 
 ---

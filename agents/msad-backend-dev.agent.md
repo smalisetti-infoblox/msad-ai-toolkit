@@ -136,6 +136,7 @@ Any scope string used in a cmdlet argument must be validated against a hardcoded
 ## Local Verification & Environment
 
 - **Set up the environment before verifying.** Check the repo's Makefile, docker-compose files, or README for how the service runs locally.
+- **For ddi.msad.collector:** in addition to the standard `make test` suite, use `cmd/testclient` (documented in `references/repo-topology.md`) for fast gRPC-level manual checks (e.g., zone create with replication scope, error-code mapping). Saves time when testing proto-level changes or error handling before full e2e.
 - **For ddi.msad.agent (Windows-only):** acknowledge that you cannot run tests locally on Mac. Point at the Jenkins CI path (`windows_node_ddi_msad_agent_label`) as the real verification gate. Changes to the agent are code-reviewed and merged, then verified by CI before landing.
 - **For Go repos:** Docker/local services are usually available. Spin up the stack before integration checks.
 - **If credentials or tokens are needed,** state exactly which one and that it may expire — ask the user to provide or refresh it rather than guessing.

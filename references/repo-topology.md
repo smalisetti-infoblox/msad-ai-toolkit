@@ -190,3 +190,131 @@ dotnet test MSADAgent\Agent.Tests\Agent.Tests.csproj
 1. **Collector proto → Middleware client:** any change to `ddi.msad.collector/api/protobuf-spec/service.proto` must trigger `make protobuf` in the middleware to regenerate `pkg/pb/`.
 2. **Error-code addition in collector:** if a new `ZONE-00x` agent error code is created, `ddi.msad.collector/pkg/util/util.go:ErrorCodeToStatus()` must be updated and tested (e.g., DDIDNS-10543 added `ZONE-005` → `codes.InvalidArgument`).
 3. **Replication-scope validator change:** any update to `isValidMSADReplicationScope*` in the middleware must be echoed in `dns.config`'s equivalent validators to stay in sync (currently they're mirrors).
+
+---
+
+## Dependency Repos (Not Core, Not Modified by Default)
+
+These repos are **not part of the five-repo core list**, but are referenced/imported by them. Changes to these repos may affect MSAD epic work, but this toolkit does not own or modify them.
+
+| Repo | Dependency Of | Local Path | Role | How to Update |
+|---|---|---|---|---|
+| **atlas.onprem.rpc.server** | ddi.msadconnect.proxy (dial target); ddi.msad.agent (proto contract) | `~/atlas.onprem.rpc.server` | Windows RPC/gRPC dispatcher server; proto-contract dependency for internal command routing | Changes to MSADAgent/Agent/Protos/RpcServer/service.proto may require syncing proto definitions or regenerating Go code from this repo's `pkg/pb/`. Check `ddi.msad.agent` and `ddi.msadconnect.proxy` protos for `go_package` headers pointing to this repo. |
+| **atlas.onprem.common** | ddi.msadconnect.proxy (go.mod import) | `~/atlas.onprem.common` | Common utilities and types for Atlas services | Direct go.mod dependency; upgrade via `go get github.com/Infoblox-CTO/atlas.onprem.common@<version>` in ddi.msadconnect.proxy. |
+
+### How to Discover More Dependency Repos
+
+If a task scope expands beyond the five core repos, use these methods to find hidden dependencies (so this list doesn't go stale):
+
+1. **grep go.mod/go.sum for Infoblox-CTO imports:**
+   ```bash
+   for repo in ddi.dns.config ddi.cloud.proxy.middleware ddi.msad.collector ddi.msadconnect.proxy; do
+     echo "=== $repo ===" 
+     grep "github.com/Infoblox-CTO/" ~/$repo/go.mod | grep -v "^#"
+   done
+   ```
+   List any `Infoblox-CTO/` imports not in the five-repo list.
+
+2. **grep proto files for go_package headers:**
+   ```bash
+   find ~/ddi.msadconnect.proxy ~/ddi.msad.agent -name "*.proto" -exec grep "^option go_package" {} + | grep -v "ddi\." | grep -v "cloud.proxy"
+   ```
+   Any `go_package` pointing to a repo outside the five list indicates a proto-contract dependency.
+
+3. **Check docs-manifest.yaml for dependencies:**
+   ```bash
+   grep -A 5 "dependencies:" ~/ddi.msadconnect.proxy/docs-manifest.yaml
+   grep -A 5 "services:" ~/ddi.msadconnect.proxy/docs-manifest.yaml
+   ```
+
+**Don't assume a repo present under `~/` is a dependency** — confirm it via one of these signals first (go.mod import, proto go_package, or docs-manifest.yaml reference).
+
+---
+
+## Existing PR Discovery
+
+When planning MSAD work, check for related open/merged PRs to avoid duplicating or conflicting with ongoing work. Use these commands (requires `gh` authenticated with GitHub):
+
+### Core Five-Repo PRs
+
+```bash
+# List open PRs in each core repo
+gh pr list --repo Infoblox-CTO/ddi.dns.config --state open --limit 15
+gh pr list --repo Infoblox-CTO/ddi.cloud.proxy.middleware --state open --limit 15
+gh pr list --repo Infoblox-CTO/ddi.msad.collector --state open --limit 15
+gh pr list --repo Infoblox-CTO/ddi.msadconnect.proxy --state open --limit 15
+gh pr list --repo Infoblox-CTO/ddi.msad.agent --state open --limit 15
+
+# Search for PRs mentioning a specific Jira ID (e.g., DDIDNS-7732)
+gh pr list --repo Infoblox-CTO/ddi.dns.config --search "DDIDNS-7732" --limit 15
+```
+
+### Dependency Repo PRs
+
+If the task touches `ddi.msadconnect.proxy` or `ddi.msad.agent`, also check the dependency repos:
+
+```bash
+gh pr list --repo Infoblox-CTO/atlas.onprem.rpc.server --state open --limit 15
+gh pr list --repo Infoblox-CTO/atlas.onprem.common --state open --limit 15
+```
+
+---
+
+## MSAD Collector Test Client (cmd/testclient)
+
+**Location:** `ddi.msad.collector/cmd/testclient/main.go`
+
+**Purpose:** Standalone gRPC CLI for directly testing MSAD Collector Zones and Records services (full CRUD). Bypasses WAPI v3 and middleware, enabling fast collector-layer checks.
+
+**When to use:** Faster than `msad-e2e-verify` for focused collector tests (e.g., validating a new replication-scope value, error-code mapping, or proto-level changes without spinning up the full dns.config + middleware stack).
+
+**Setup Requirements:**
+
+1. Start the collector server (in `~/ddi.msad.collector`):
+   ```bash
+   go run ./cmd/server --logging.level=debug --redis.enable=false
+   ```
+   Server listens on `localhost:9090` by default (insecure gRPC, no TLS needed for local testing).
+
+2. Determine a valid MSAD Agent GUID to use as `--agent-id`. For testing:
+   ```bash
+   AGENT_ID="00000000-0000-0000-0000-000000000001"  # any valid GUID format
+   ```
+
+**Invocation Examples:**
+
+```bash
+cd ~/ddi.msad.collector
+
+# List zones (requires server-ips flag, can be empty or mock IPs)
+go run ./cmd/testclient --endpoint localhost:9090 --agent-id $AGENT_ID \
+  zone list --server-ips 192.168.1.10,192.168.1.11
+
+# Create a primary zone with replication scope
+go run ./cmd/testclient --endpoint localhost:9090 --agent-id $AGENT_ID \
+  zone create --zone-name example.com --zone-type 1 --comment "Test zone" \
+  --replication-scope domain
+
+# Create an A record
+go run ./cmd/testclient --endpoint localhost:9090 --agent-id $AGENT_ID \
+  record create --zone-name example.com --record-name www --record-type A \
+  --address 192.168.1.100 --ttl 300
+
+# JSON output mode (for scripting)
+go run ./cmd/testclient --endpoint localhost:9090 --agent-id $AGENT_ID --json \
+  zone create --zone-name example.com --zone-type 1 | jq .
+```
+
+**Supported Commands:**
+- `zone list`, `zone create`, `zone update`, `zone delete`
+- `record list`, `record get`, `record create`, `record update`, `record delete`
+
+**Key Flags:**
+- `--endpoint <host:port>` — collector gRPC address (default: localhost:9090)
+- `--agent-id <guid>` — MSAD Agent Windows GUID (required)
+- `--json` — output in JSON format
+- `--timeout <duration>` — request timeout (default: 30s)
+- `--replication-scope <local|domain|forest>` — zone replication scope (zone create only)
+- `--zone-type <1-4>` — zone type (1=Primary, 2=Secondary, 3=Stub, 4=Forwarder)
+
+**Known Documentation Gap:** This repo's `docs-manifest.yaml` still has a stale comment `# cli: — no CLI tool` under the `operations:` section. This is a follow-up for that repo's maintainers to update. The toolkit documents it here for reference.
