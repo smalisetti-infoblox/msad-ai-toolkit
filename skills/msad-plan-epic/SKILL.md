@@ -1,5 +1,5 @@
 ---
-name: msad-epic-planner
+name: msad-plan-epic
 description: "Epic structure planner for MSAD development. Analyzes a Jira epic and generates a recommended hierarchy of stories and backend/frontend tasks following toolkit patterns. Use before running /msad-dev-epic to ensure optimal epic structure and automatic toolkit filtering."
 version: 0.1.0
 created_by:
@@ -14,7 +14,7 @@ Analyze a Jira epic and generate a recommended structure of stories and tasks fo
 ## Quick Start
 
 ```bash
-/msad-epic-planner DDIDNS-7732
+/msad-plan-epic DDIDNS-7732
 ```
 
 **Input:** Epic ID (e.g., `DDIDNS-7732`)
@@ -214,13 +214,13 @@ STORY 3: DDIDNS-10567 "QA — E2E Testing for Zone Replication Scope"
 ===== CREATION OPTIONS =====
 
 Option 1: Create in Jira Automatically
-  /msad-epic-planner DDIDNS-7732 --create
+  /msad-plan-epic DDIDNS-7732 --create
 
 Option 2: Show Jira CLI Commands
-  /msad-epic-planner DDIDNS-7732 --template
+  /msad-plan-epic DDIDNS-7732 --template
 
 Option 3: Review First (Default)
-  /msad-epic-planner DDIDNS-7732
+  /msad-plan-epic DDIDNS-7732
   [Review output above, then decide]
 ```
 
@@ -370,14 +370,14 @@ Use these prompts to generate story/task structure:
 
 ### Option A: Manual Review (Default)
 
-1. Run `/msad-epic-planner DDIDNS-7732`
+1. Run `/msad-plan-epic DDIDNS-7732`
 2. Review recommended structure
-3. If happy: `/msad-epic-planner DDIDNS-7732 --create`
+3. If happy: `/msad-plan-epic DDIDNS-7732 --create`
 4. If changes needed: manually edit Jira stories/tasks
 
 ### Option B: Auto-Create from Planner
 
-1. Run `/msad-epic-planner DDIDNS-7732 --create`
+1. Run `/msad-plan-epic DDIDNS-7732 --create`
 2. Skill uses Atlassian MCP to create stories + tasks
 3. Links all tasks to their parent story
 4. Links all stories to the epic
@@ -385,7 +385,7 @@ Use these prompts to generate story/task structure:
 
 ### Option C: CLI Template for Manual Creation
 
-1. Run `/msad-epic-planner DDIDNS-7732 --template`
+1. Run `/msad-plan-epic DDIDNS-7732 --template`
 2. Outputs Jira CLI commands (or curl equivalents)
 3. Example:
    ```bash
@@ -445,13 +445,13 @@ Outputs:
 
 ```
 1. Create epic in Jira (rough description)
-2. /msad-epic-planner EPIC-ID          ← Structure the epic
+2. /msad-plan-epic EPIC-ID          ← Structure the epic
 3. /msad-dev-planning EPIC-ID          ← Generate detailed implementation plan
 4. /msad-dev-epic EPIC-ID              ← Orchestrate implementation (parallelized)
 ```
 
 **Cross-links:**
-- **Before:** `/msad-epic-planner` (structure)
+- **Before:** `/msad-plan-epic` (structure)
 - **After:** `/msad-dev-epic` (execute)
 - **Reference:** See `README.md` "Suggested Jira Structure" for examples
 
