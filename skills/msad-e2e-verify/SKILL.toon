@@ -1,0 +1,18 @@
+N:msad-e2e-verify
+D:End-to-end verification of MSAD zone operations via API (without the Windows agent). Brings up the dns.config service with mocked MSAD collector, drives zone create/update/delete flows via WAPI v3, verifies replication-scope handling, and asserts on DB state and mocked responses. Use to validate replication-scope logic end-to-end at the API layer.
+G:msad|e2e|test|verification|api|wapi-v3|zone|replication-scope|mock|collector|no-windows
+U[4]:
+  Testing zone creation with local/domain/forest replication scopes via WAPI v3
+  Verifying replication-scope validation and error handling without the Windows agent
+  Testing zone update and delete flows
+  Asserting on DB state and mocked MSAD collector responses
+S[3]{n,step}:
+  1,Bring up dns.config service and mocked MSAD collector
+  2,Drive zone create/update/delete flows via WAPI v3 API client
+  3,Assert on replication-scope values in DB and mocked collector responses
+R[4]:
+  🔴 Windows agent (ddi.msad.agent) is not needed or run — tests are API-layer only
+  🔴 All zone operations must be idempotent (zone create is pre-flighted for duplicates)
+  [ ] Mocked collector has pre-configured zone error codes for failure scenarios
+  [ ] DB assertions validate replication-scope persistence across reads
+F:Go|SQL|WAPI v3|gRPC mocks|Docker Compose|API client

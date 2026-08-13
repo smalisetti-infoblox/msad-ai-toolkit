@@ -1,0 +1,24 @@
+N:msad-dev-planning
+D:Produces an MSAD implementation plan for a Jira epic/story/task. Reads the ticket, gathers repo context, identifies per-repo work packages, surfaces clarifying questions, writes a plan file, and hard-gates on user approval. Use when working on an MSAD feature. Don't use for one-off code edits — invoke /msad-dev-planning for any MSAD task first.
+G:msad|planning|jira|epic|story|task|multi-repo|cross-repo|work-package|ddidns|zone|replication-scope|architecture-hub
+U[4]:
+  Planning an epic or story across the five MSAD repos
+  Identifying per-repo work packages and dependencies
+  Discovering related open/closed PRs to avoid duplicate work
+  Getting approval before execution
+S[8]{n,step}:
+  1,Intake and classify the Jira ID
+  2,Fetch epic/story/task and linked tickets from Jira
+  3,Discover related PRs in affected repos via gh pr list
+  4,Grep each repo for prior similar work and test patterns
+  5,Map per-repo impact (what files change, what validators sync)
+  6,Identify cross-repo dependencies (proto, error codes, validators)
+  7,Surface clarifying questions and write plan file
+  8,Gate on user approval (approve / approve-with-edits / reject)
+R[5]:
+  🔴 Cross-repo dependencies must be explicitly documented and ordered
+  🔴 Windows-only code paths must note verification gate (Windows CI, not local)
+  🔴 New replication-scope validators must sync across dns.config and middleware
+  [ ] Plan file is written to disk and survives /clear
+  [ ] User approval is mandatory before execution
+F:Jira|GitHub|Atlassian MCP|gh CLI|Git|CLAUDE.md
