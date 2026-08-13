@@ -1,6 +1,7 @@
 ---
 name: msad-code-review
-description: "Code review agent for MSAD repos. Points at a single pull request and reviews the diff against MSAD-specific requirements plus general code quality, security, and architectural standards. Severity in MUST/SHOULD/MAY. Triggers on: 'review this PR', 'code review PR <url>', 'review DDIDNS-XXXXX'. Don't use for writing code, implementing stories, or generating PR descriptions."
+version: 0.1.0
+description: "Code review agent for MSAD repos (GitHub PRs only). Points at a single pull request and reviews the diff against MSAD-specific requirements plus general code quality, security, and architectural standards. Severity in MUST/SHOULD/MAY. Triggers on: 'review this PR', 'code review PR <url>', 'review DDIDNS-XXXXX'. Don't use for writing code, implementing stories, or generating PR descriptions. Note: this agent reviews PRs but cannot fetch Jira context directly; use with GitHub PRs."
 tools: [Read, Grep, Glob, Bash, mcp__github__*]
 model: sonnet
 created_by:

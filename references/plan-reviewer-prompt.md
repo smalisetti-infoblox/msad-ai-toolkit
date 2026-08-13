@@ -47,7 +47,7 @@ Read the plan and verify:
 - [ ] Tests are specified per repo and per impact area (unit, integration, e2e)
 - [ ] **Windows-only limitations are acknowledged:** if `ddi.msad.agent` is involved, the plan states that local testing is impossible and Windows CI is the gate
 - [ ] If E2E tests are in scope, the plan explains whether they're mocked (MSAD collector mocked) or real (actual collector running)
-- [ ] If a test suite doesn't exist yet, the plan says "add new tests in X_test.go following the Y pattern" (not just "test it")
+- [ ] If a test suite doesn't exist yet, the plan says "add new tests in X_test.go following the Y pattern" where Y is concrete (e.g., "table-driven `[]struct{...}` pattern in zones_test.go" for Go, "xUnit in Agent.Tests/" for C#)
 
 ### 5. Risk & Assumptions
 

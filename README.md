@@ -79,7 +79,7 @@ User: /msad-dev-planning DDIDNS-7732
 **What the planning skill does:**
 
 1. Reads the Jira ticket (epic + linked stories/tasks)
-2. Groups work by repo (ddi.dns.config, middleware, collector, etc.)
+2. Groups work by repo (ddi.dns.config, ddi.cloud.proxy.middleware, ddi.msad.collector, etc.)
 3. Identifies cross-repo dependencies (proto sync, validator mirrors, error codes)
 4. Calls a fresh-context reviewer agent to audit the plan
 5. Surfaces the plan + reviewer's findings for your approval

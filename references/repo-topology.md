@@ -6,9 +6,9 @@ This document maps the five-repo ecosystem supporting the DDIDNS-7732 epic (Micr
 
 | Repo | Stack | Role | Local path | Build | Test |
 |---|---|---|---|---|---|
-| **ddi.dns.config** | Go 1.25.9 | WAPI v3 API surface; owns replication-scope validation | `~/ddi.dns.config` | `make vendor` | `make test` |
-| **ddi.cloud.proxy.middleware** | Go 1.25.9 | gRPC interceptor library; MSAD request translation | `~/ddi.cloud.proxy.middleware` | `make vendor` | `make test` |
-| **ddi.msad.collector** | Go 1.25.9 | gRPC microservice; error-code mapping | `~/ddi.msad.collector` | `make vendor` | `make test` |
+| **ddi.dns.config** | Go 1.23+ | WAPI v3 API surface; owns replication-scope validation | `~/ddi.dns.config` | `make vendor` | `make test` |
+| **ddi.cloud.proxy.middleware** | Go 1.23+ | gRPC interceptor library; MSAD request translation | `~/ddi.cloud.proxy.middleware` | `make vendor` | `make test` |
+| **ddi.msad.collector** | Go 1.23+ | gRPC microservice; error-code mapping | `~/ddi.msad.collector` | `make vendor` | `make test` |
 | **ddi.msadconnect.proxy** | Go (not yet surveyed) | Windows RPC/LDAP bridge | `~/ddi.msadconnect.proxy` | `make vendor` | `make test` |
 | **ddi.msad.agent** | C#/.NET 8 (net8.0-windows) | Windows Service; PowerShell zone controllers | `~/ddi.msad.agent` | `dotnet build MSADAgent\MSADAgent.sln -c Debug` | `dotnet test MSADAgent\Agent.Tests\Agent.Tests.csproj` |
 
