@@ -1,6 +1,6 @@
 # MSAD AI Toolkit — Contributing with the Fork Pattern
 
-This toolkit automates epic development across the five-repo MSAD ecosystem. All work uses the **fork-based contribution pattern** to contribute back to the canonical Infoblox-CTO organization.
+This toolkit automates epic development across the six-repo MSAD ecosystem. All work uses the **fork-based contribution pattern** to contribute back to the canonical Infoblox-CTO organization.
 
 ## Canonical Repos (Infoblox-CTO Organization)
 
@@ -9,6 +9,7 @@ The toolkit operates on these repos in the **Infoblox-CTO** org:
 | Repo | Canonical URL |
 |---|---|
 | **ddi.dns.config** | `https://github.com/Infoblox-CTO/ddi.dns.config` |
+| **ddi.dns.data** | `https://github.com/Infoblox-CTO/ddi.dns.data` |
 | **ddi.cloud.proxy.middleware** | `https://github.com/Infoblox-CTO/ddi.cloud.proxy.middleware` |
 | **ddi.msad.collector** | `https://github.com/Infoblox-CTO/ddi.msad.collector` |
 | **ddi.msadconnect.proxy** | `https://github.com/Infoblox-CTO/ddi.msadconnect.proxy` |
@@ -21,6 +22,7 @@ The toolkit operates on these repos in the **Infoblox-CTO** org:
 | Repo | Default Branch |
 |---|---|
 | ddi.dns.config | `main` |
+| ddi.dns.data | `main` |
 | ddi.cloud.proxy.middleware | `master` |
 | ddi.msad.collector | `main` |
 | ddi.msadconnect.proxy | `master` |
@@ -123,6 +125,7 @@ Each agent has access to:
 
 Agents expect repos cloned to `~/REPO-NAME`:
 - `~/ddi.dns.config`
+- `~/ddi.dns.data`
 - `~/ddi.cloud.proxy.middleware`
 - `~/ddi.msad.collector`
 - `~/ddi.msadconnect.proxy`
@@ -153,7 +156,7 @@ If you manually contribute using the toolkit's standards:
 ### Before Starting
 
 ```bash
-# For any of the five repos:
+# For any of the six repos:
 cd ~/REPO-NAME
 git fetch upstream main
 git checkout -b DDIDNS-XXXXX-description upstream/main

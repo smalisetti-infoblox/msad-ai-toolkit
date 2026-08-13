@@ -1,7 +1,7 @@
 {
   "name": "msad-ai-toolkit",
   "version": "0.1.0",
-  "description": "Claude Code custom agent + skills for the MSAD (Microsoft Active Directory DNS) ecosystem. Implements multi-repo orchestration for DDIDNS-7732 and related epics spanning ddi.dns.config, ddi.cloud.proxy.middleware, ddi.msad.collector, ddi.msadconnect.proxy, and ddi.msad.agent. Includes implementation agents, code review, planning/execution orchestration, and API-level E2E verification.",
+  "description": "Claude Code custom agent + skills for the MSAD (Microsoft Active Directory DNS) ecosystem. Implements multi-repo orchestration for DDIDNS-7732 and related epics spanning ddi.dns.config, ddi.dns.data, ddi.cloud.proxy.middleware, ddi.msad.collector, ddi.msadconnect.proxy, and ddi.msad.agent. Includes implementation agents, code review, planning/execution orchestration, and API-level E2E verification.",
   "label": "MSAD AI Toolkit",
   "status": "Live",
   "icon": "🌐",
@@ -22,8 +22,10 @@
     "agent/msad-backend-dev": "0.1.0",
     "agent/msad-code-review": "0.1.0",
     "skill/msad-developer": "0.1.0",
+    "skill/msad-epic-planner": "0.1.0",
     "skill/msad-dev-planning": "0.1.0",
     "skill/msad-dev-epic": "0.1.0",
+    "skill/msad-dev-story": "0.1.0",
     "skill/msad-dev-execution": "0.1.0",
     "skill/msad-e2e-verify": "0.1.0"
   },

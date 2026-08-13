@@ -1,6 +1,6 @@
 # MSAD Skills
 
-Four orchestration skills that drive the multi-repo MSAD development workflow. Each skill is self-contained and can be invoked independently, but typically they form a chain: **router → planning → execution**.
+Six orchestration skills that drive the multi-repo MSAD development workflow. Each skill is self-contained and can be invoked independently, but typically they form a chain: **epic-planner → planning → epic/story execution**.
 
 ---
 
@@ -8,8 +8,11 @@ Four orchestration skills that drive the multi-repo MSAD development workflow. E
 
 | Skill | Use When | Invokes |
 |---|---|---|
+| **msad-epic-planner** | You have a rough epic idea; need to structure it | Atlassian MCP (creates stories/tasks) |
 | **msad-developer** | You have a Jira task (epic/story) | Nothing (suggests planning or execution) |
-| **msad-dev-planning** | You need a plan (plan doesn't exist yet) | No sub-agents (dispatches reviewer internally) |
+| **msad-dev-planning** | You need a detailed plan (plan doesn't exist yet) | No sub-agents (dispatches reviewer internally) |
+| **msad-dev-epic** | You have a structured epic; want to orchestrate all stories + tasks | Parallel msad-backend-dev agents (Backend tasks only) |
+| **msad-dev-story** | You have a story; want to orchestrate its tasks | Parallel msad-backend-dev agents (Backend tasks only) |
 | **msad-dev-execution** | You have an approved plan | msad-backend-dev + msad-code-review agents |
 | **msad-e2e-verify** | You want API-level E2E tests (no Windows agent) | Docker, curl (no agents) |
 
@@ -63,6 +66,87 @@ User: /msad-dev-planning DDIDNS-10519
 
 - **Always start here** if you have a new Jira task and don't know what to do next
 - **Skip for:** one-off code edits, ad-hoc questions, or if you already have an approved plan
+
+---
+
+## msad-epic-planner (Epic Structurer)
+
+**Analyzes a Jira epic and generates a recommended structure of stories and backend/frontend tasks.**
+
+Helps you organize an epic into well-structured stories (Backend, Frontend, QA) with all tasks properly scoped to repos. Can auto-create the stories/tasks in Jira or output a template.
+
+### Usage
+
+```
+User: /msad-epic-planner DDIDNS-7732
+```
+
+Input: Epic ID
+
+Output: 
+1. Analysis of epic scope (repos, features, dependencies)
+2. Recommended story hierarchy
+3. Per-story task breakdown
+4. Option to create in Jira or show template
+
+### What It Does
+
+1. **Fetch & analyze epic** — reads summary, description, AC, identifies impacted repos
+2. **Decompose into functional areas** — Backend, Frontend/UI, QA, Docs
+3. **Group Backend work into stories** — each story = one logical deliverable
+4. **Break each story into repo-scoped tasks** — one task per repo with changes
+5. **Generate Frontend/QA stories** — if detected
+6. **Output structured hierarchy** — with full descriptions and AC
+7. **Create in Jira** — optional auto-creation via Atlassian MCP
+
+### Example Flow
+
+```
+User: /msad-epic-planner DDIDNS-7732
+
+Planner: Analyzing epic...
+  ✓ Feature: Zone creation with replication scopes
+  ✓ Repos: dns.config, middleware, collector, agent
+  ✓ Functional areas: Backend, Frontend, QA
+
+Planner: Recommended structure:
+  
+  Story 1: "Backend — Support Domain/Forest Replication Scope"
+    ├─ Task: middleware (transform & validate)
+    ├─ Task: collector (error-code mapping)
+    ├─ Task: dns.config (validation)
+    └─ Task: agent (scope check)
+  
+  Story 2: "Frontend — Portal UI for Scope Selection"
+    ├─ Task: Portal selector component
+    ├─ Task: Form validation
+    └─ Task: Documentation
+  
+  Story 3: "QA — E2E Testing"
+    ├─ Task: Test plan
+    └─ Task: Automation
+
+Planner: Create in Jira? (Yes / No / Show Template)
+
+User: Yes
+
+[Planner creates 3 stories and 9 tasks in Jira]
+
+Planner: ✓ Created 3 stories, 9 tasks. Ready for /msad-dev-epic DDIDNS-7732
+```
+
+### When to Use
+
+- **New epic** — before any planning/implementation, structure the work correctly
+- **Existing epic with messy structure** — refactor into Backend/Frontend/QA stories
+- **Adding stories to an epic** — decompose new feature into structured stories + tasks
+- **Before running /msad-dev-epic** — ensure epic is well-structured for automatic Backend/Frontend filtering
+
+### Output Formats
+
+- **Interactive (default):** Shows analysis + recommended structure; prompts for action
+- **--template:** Outputs markdown + Jira CLI commands for manual creation
+- **--create:** Auto-creates all stories/tasks in Jira
 
 ---
 
@@ -355,34 +439,65 @@ Deferred: Real MSAD agent (Windows CI), AD replication (stage testing)
 ## Skill Dependency Chain
 
 ```
-       Start
+       Rough Epic Idea
          ↓
-  /msad-developer (router)
+  /msad-epic-planner ← Structure the epic (stories/tasks)
          ↓
-   (classifies input)
+   (analyzes scope)
          ↓
-   /msad-dev-planning ← if plan doesn't exist
+   (generates story hierarchy)
          ↓
-   (writes plan)
+   (creates in Jira or shows template)
          ↓
-   (plan auto-review)
+   Structured Epic
          ↓
-   (user approval)
+   Pick Path A or B:
+   
+   PATH A (Fast):
+   ├─ /msad-dev-epic ← Orchestrate all stories
+   │  ├─ (discovers tasks)
+   │  ├─ (classifies Backend/Frontend/UI)
+   │  ├─ (dispatches agents for Backend only)
+   │  └─ (reports: X PRs ready, Y Frontend tasks excluded)
+   │
+   PATH B (Detailed):
+   ├─ /msad-dev-planning ← Generate detailed plan
+   │  ├─ (analyzes each task)
+   │  ├─ (identifies dependencies)
+   │  ├─ (plan auto-review)
+   │  └─ (user approval gate)
+   │
+   ├─ /msad-dev-execution ← Execute approved plan
+   │  ├─ (dispatches agents per work package)
+   │  ├─ (validation loop: review → fix → re-review)
+   │  └─ (draft PRs ready)
+   │
+   Parallel Story Execution:
+   └─ /msad-dev-story DDIDNS-10562 ← Faster single-story focus
+      └─ (same flow as epic, one story only)
+
+   Parallel Testing:
+   └─ /msad-e2e-verify ← API-level E2E testing (anytime)
          ↓
-  /msad-dev-execution ← once plan is approved
-         ↓
-   (dispatches agents)
-         ↓
-   (validation loop)
-         ↓
-   (draft PRs)
-         ↓
-      Done
+      Done (all PRs ready for review + merge)
 ```
 
-**Typical flow:** `/msad-developer` → `/msad-dev-planning` → `/msad-dev-execution`
+**Recommended flow for epic release:**
+1. `/msad-epic-planner DDIDNS-7732` (structure: 5 min)
+2. `/msad-dev-epic DDIDNS-7732` (execute: 20 min)
+3. Review & merge PRs (parallel to Frontend team's work)
 
-**Parallel track:** `/msad-e2e-verify` (anytime, independent)
+**For single story:**
+1. `/msad-dev-story DDIDNS-10562` (execute: 10-15 min)
+
+**For detailed planning + execution (more control):**
+1. `/msad-epic-planner DDIDNS-7732` (structure: 5 min)
+2. `/msad-dev-planning DDIDNS-7732` (plan: 10 min)
+3. `/msad-dev-execution DDIDNS-7732` (execute: 20 min)
+
+**Parallel tracks:**
+- `/msad-e2e-verify` (API-level testing, anytime)
+- Frontend team works on excluded UI stories in parallel
 
 ---
 

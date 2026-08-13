@@ -8,7 +8,7 @@ Two specialized Claude Code agents for MSAD development. Typically dispatched by
 
 **Implementation agent for a single Jira task in a single repo.**
 
-Writes code, tests, and commits. Works across the five-repo ecosystem (Go + C#/.NET).
+Writes code, tests, and commits. Works across the six-repo ecosystem (Go + C#/.NET).
 
 ### When to Invoke
 

@@ -1,5 +1,7 @@
 # MSAD Dev Planning: Enhanced Jira Analysis for Epics
 
+**Status:** Improvements 2 (Phase Detection) and 7 (Scope Boundaries) have been promoted into SKILL.md Step 2b (Functional Area Classification). This document serves as design reference; live implementation is in SKILL.md.
+
 **Purpose:** Improve how the msad-dev-planning skill analyzes Jira epics, stories, tasks, and subtasks to produce better plans that account for work phases, scope boundaries, and existing PRs.
 
 **Motivation:** Current analysis missed critical structure in DDIDNS-7732:

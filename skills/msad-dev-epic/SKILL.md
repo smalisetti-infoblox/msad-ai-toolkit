@@ -42,25 +42,30 @@ Input: Epic ID (DDIDNS-7732)
 Step 1: Discovery
   ├─ Fetch epic via Atlassian MCP
   ├─ List all linked tasks/stories
-  ├─ Discover existing PRs (gh pr list per repo)
-  ├─ Classify: partial vs. complete vs. not-started
-  ├─ Identify gaps per PR
+  ├─ Classify Backend vs. Frontend/UI (keyword matching on summary)
+  │   ├─ Backend signals: "middleware", "collector", "agent", "dns.config", "dns.data", "proxy", "backend"
+  │   └─ Frontend/UI signals: "portal", "UI", "frontend", "form", "selector", "editor"
+  ├─ Discover existing PRs (gh pr list per repo, only Backend tasks)
+  ├─ Classify: partial vs. complete vs. not-started (Backend PRs only)
+  ├─ Identify gaps per PR (Backend PRs only)
   └─ Fetch & analyze PR review comments (blocking vs. non-blocking)
 
-Step 2: Dispatch Subagents (Parallel, Prioritized)
-  ├─ For each partial PR with review feedback:
+Step 2: Dispatch Subagents (Parallel, Prioritized) — Backend-Only
+  ├─ For each partial Backend PR with review feedback:
   │   └─ Agent: address gaps + blocking comments → verify coverage → commit → push
-  ├─ For each complete PR:
+  ├─ For each complete Backend PR:
   │   └─ Agent: run tests → verify CI → ready for review
-  └─ For each not-started task:
+  └─ For each not-started Backend task:
       └─ Agent: implement → test → commit → push → draft PR
 
 Step 3: Consolidate & Report
-  ├─ Collect all results
-  ├─ Verify all tests passing
-  ├─ Verify all coverage ≥80%
+  ├─ Collect all Backend results
+  ├─ Verify all Backend tests passing
+  ├─ Verify all Backend coverage ≥80%
   ├─ Track which review comments were addressed
-  ├─ Generate per-PR summary
+  ├─ Generate per-PR summary (Backend PRs only)
+  ├─ List excluded Frontend/UI tasks
+  │   └─ "X tasks excluded — Frontend/UI, managed by separate team: DDIDNS-10544, 10548, 10563"
   └─ Return: status (ready-for-review / issues-found)
 ```
 
@@ -70,13 +75,18 @@ Step 3: Consolidate & Report
 
 1. **Fetch epic** via `getJiraIssue(DDIDNS-7732)` — get summary, description, status
 2. **List linked issues** via JQL: `parent = DDIDNS-7732` — all tasks/stories
-3. **Discover PRs** — for each repo involved, run `gh pr list --search <epic-id>`
-4. **Classify PRs:**
+3. **Classify Backend vs. Frontend/UI** for each linked task (keyword matching on summary):
+   - **Frontend/UI signals:** "portal", "UI", "frontend", "form", "selector", "editor" → classify as 🚫 Frontend/UI (excluded from dispatch)
+   - **Backend signals:** "middleware", "collector", "agent", "dns.config", "dns.data", "proxy", "backend" → classify as ✅ Backend (will be dispatched)
+   - **No signals:** default to ✅ Backend
+   - **Keep a list of excluded Frontend/UI tasks** for reporting in Step 3
+4. **Discover PRs** — for each Backend task, run `gh pr list --search <task-id>` (skip Frontend/UI tasks)
+5. **Classify Backend PRs:**
    - **Partial** — DRAFT status + gap identified in description
    - **Complete** — DRAFT status + no gap identified
    - **Not-started** — no PR found for task
-5. **Identify gaps** — parse PR description or infer from task AC
-6. **Fetch review comments** — analyze blocking vs. informational feedback
+6. **Identify gaps** — parse PR description or infer from task AC
+7. **Fetch review comments** — analyze blocking vs. informational feedback
 
 ### Step 2: Dispatch Subagents (Parallel)
 
@@ -92,18 +102,22 @@ Each agent receives:
 
 ### Step 3: Consolidate & Report
 
-**Metrics per agent:**
+**Metrics per Backend agent:**
 - Test results (pass/fail)
 - Coverage % (threshold check)
 - Files modified
 - Commits pushed
 - Ready-for-review status
 
-**Consolidated status:**
-- All tests passing? ✅ / ❌
-- All coverage ≥80%? ✅ / ❌
-- All pushed? ✅ / ❌
-- Summary: "4/4 PRs ready for human review" or "PR 507 coverage low (78%)"
+**Frontend/UI exclusion summary:**
+- List all tasks classified as 🚫 Frontend/UI
+- Example: "3 tasks excluded — Frontend/UI, managed by separate team: DDIDNS-10544 (Portal selector), DDIDNS-10548 (Portal UI), DDIDNS-10563 (Portal design)"
+
+**Consolidated Backend status:**
+- All Backend tests passing? ✅ / ❌
+- All Backend coverage ≥80%? ✅ / ❌
+- All Backend PRs pushed? ✅ / ❌
+- Summary: "4/4 Backend PRs ready for human review. 3 Frontend/UI tasks excluded (separate track)." or "PR 507 coverage low (78%). 2 Frontend/UI tasks excluded."
 
 ## Success Criteria
 
@@ -122,17 +136,20 @@ Input: /msad-dev-epic DDIDNS-7732
 Discovery:
   Epic DDIDNS-7732 (Implementing)
   27 linked tasks/stories
-  4 existing draft PRs (507, 508, 241, 6300)
-  3 tasks not-started (10521, 10544, 10541)
+  Classification (Backend vs. Frontend/UI):
+    - Backend: 20 tasks
+    - Frontend/UI: 7 tasks (excluded from dispatch)
+  4 existing draft PRs (507, 508, 241, 6300) — all Backend
+  3 Backend tasks not-started (10521, 10541)
 
-Dispatch:
+Dispatch (Backend only):
   Agent 1: PR 507 (partial, gap: handler tests)
   Agent 2: PR 508 (complete, review)
   Agent 3: PR 241 (partial, gap: error codes)
   Agent 4: PR 6300 (complete, review)
   Agent 5: Task 10521 (not-started, agent validation)
-  Agent 6: Task 10544 (not-started, portal UI)
-  Agent 7: Task 10541 (not-started, E2E verification)
+  Agent 6: Task 10541 (not-started, E2E verification)
+  [Skipped Frontend/UI: Task 10544, 10548, 10563 — managed by separate team]
 
 Results:
   ✅ PR 507: tests added, coverage 92.3%, ready
@@ -140,10 +157,14 @@ Results:
   ✅ PR 241: test cases added, coverage 92.1%, ready
   ✅ PR 6300: tests pass, CI green, ready
   ✅ Task 10521: implementation complete, PR 999 ready
-  ⏳ Task 10544: in progress...
-  ⏳ Task 10541: in progress...
+  ✅ Task 10541: implementation complete, PR 1000 ready
+  
+  Frontend/UI Excluded (separate track):
+    • DDIDNS-10544: Portal selector for replication scope
+    • DDIDNS-10548: Portal form for scope changes
+    • DDIDNS-10563: Portal UI design + implementation
 
-Report: 4/7 ready for review, 3 in progress
+Report: 6/6 Backend PRs ready for human review. 3 Frontend/UI tasks excluded (managed by separate team).
 ```
 
 ## Phase Support
@@ -186,6 +207,7 @@ See [REVIEW-COMMENT-HANDLING.md](REVIEW-COMMENT-HANDLING.md) and [COMMENT-INTEGR
 
 ## Related Skills
 
+- **`/msad-dev-story`** — orchestrates a single story (smaller scope than epic); use for one-story focus
 - **`/msad-dev-planning`** — generates plan from epic (still used for detailed analysis)
 - **`/msad-dev-execution`** — dispatches agents (called internally by this skill, also standalone)
 - **`/msad-backend-dev`** — implements a single task (dispatched as subagent by this skill)

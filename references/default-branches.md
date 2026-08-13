@@ -7,6 +7,7 @@ When contributing to Infoblox-CTO repos, always target the repo's **actual defau
 | Repo | Default Branch | Canonical URL |
 |---|---|---|
 | **ddi.dns.config** | `main` | https://github.com/Infoblox-CTO/ddi.dns.config |
+| **ddi.dns.data** | `main` | https://github.com/Infoblox-CTO/ddi.dns.data |
 | **ddi.cloud.proxy.middleware** | `master` | https://github.com/Infoblox-CTO/ddi.cloud.proxy.middleware |
 | **ddi.msad.collector** | `main` | https://github.com/Infoblox-CTO/ddi.msad.collector |
 | **ddi.msadconnect.proxy** | `master` | https://github.com/Infoblox-CTO/ddi.msadconnect.proxy |

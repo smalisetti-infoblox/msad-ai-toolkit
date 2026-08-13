@@ -1,19 +1,42 @@
 # MSAD AI Toolkit
 
-**End-to-end automation for MSAD epic development.** Claude Code skills + subagents for discovering tasks, completing partial PRs, implementing fresh features, and orchestrating execution across five repositories with different stacks.
+**End-to-end automation for MSAD epic development.** Claude Code skills + subagents orchestrate multi-repo work across six repositories, from epic planning through PR-ready automation with automatic Backend/Frontend filtering.
 
-**Handles:** Epic → Discovery → Parallel Agents → PR-Ready (20 min, all quality gates passed)
+**Core Workflow:** Epic → Structure (planner) → Orchestrate (parallel agents) → Code Review → PR-Ready (25 min total)
 
-**Quick Start:** See [Quick Start](#quick-start-recommended) for your first epic, or jump to [Usage Patterns](#usage-patterns) for worked examples.
+**Key Features:**
+- 🎯 **Epic Planner** — Structure epics into Backend/Frontend/QA stories with repo-scoped tasks
+- 🚀 **Parallel Orchestration** — Execute Backend work in parallel; auto-exclude Frontend/UI tasks (separate team)
+- 📖 **Story-Level Execution** — Run single stories faster (10-15 min) when needed
+- ✅ **Automatic Quality Gates** — Tests, coverage ≥80%, linting all verified before PR
+- 🔄 **Cross-Repo Coordination** — Handles proto sync, validator mirrors, error-code mapping
+- 📝 **Jira Guidance** — Structured epic/story templates for optimal toolkit automation
+
+**Quick Start:** See [Quick Start](#quick-start-recommended) for your first epic, or [Usage Patterns](#usage-patterns) for worked examples.
 
 ---
 
-## Five-Repo Ecosystem
+## Table of Contents
+
+- [Six-Repo Ecosystem](#six-repo-ecosystem) — Core repos + dependencies
+- [Installation](#installation) — Setup options
+- [Quick Start](#quick-start-recommended) — Two-step workflow for new epics
+- [Other Epic Patterns](#other-epic-patterns) — Story-level execution, detailed planning
+- [Architecture](#architecture-four-tier-automation) — Four-tier automation model
+- [Suggested Jira Structure](#suggested-jira-structure-for-toolkit-optimization) — Best practices for epic organization
+- [Usage Patterns](#usage-patterns) — Worked examples (Quick Epic, Detailed Plan, PR Gaps)
+- [Troubleshooting & FAQ](#troubleshooting--faq)
+- [References](#references-documentation) — Links to detailed docs
+
+---
+
+## Six-Repo Ecosystem
 
 | Repo | Stack | Role |
 |---|---|---|
 | **ddi.dns.config** | Go | WAPI v3 API surface; replication-scope validation |
-| **ddi.cloud.proxy.middleware** | Go | gRPC interceptor library; MSAD request translation |
+| **ddi.dns.data** | Go | WAPI v3 data layer; zone data retrieval and transformation |
+| **ddi.cloud.proxy.middleware** | Go | gRPC interceptor library; MSAD request translation (shared by dns.config and dns.data) |
 | **ddi.msad.collector** | Go, gRPC | gRPC microservice; error-code mapping |
 | **ddi.msadconnect.proxy** | Go | Windows RPC/LDAP bridge |
 | **ddi.msad.agent** | C#/.NET 8 | Windows Service; PowerShell zone controllers (Windows-only testing) |
@@ -54,7 +77,7 @@ git clone https://github.com/Infoblox-CTO/msad-ai-toolkit.git ~/msad-ai-toolkit
 # Path: ~/msad-ai-toolkit
 ```
 
-**First Time?** Follow [CLAUDE.md](CLAUDE.md) to fork and configure the five MSAD repos.
+**First Time?** Follow [CLAUDE.md](CLAUDE.md) to fork and configure the six MSAD repos.
 
 ### Option 2: Symlink into ~/.claude/
 
@@ -72,9 +95,27 @@ ln -s ~/msad-ai-toolkit/skills/* ~/.claude/skills/
 
 ## Quick Start (Recommended)
 
-### One-Command Epic Execution
+### Step 1: Structure Your Epic (One-Time)
 
-You have a Jira epic. **Just run:**
+You have a rough idea. **First, structure the epic:**
+
+```bash
+/msad-epic-planner DDIDNS-7732
+```
+
+**What happens:**
+1. Analyzes epic scope (what repos, what features)
+2. Recommends Backend/Frontend/QA story breakdown
+3. Suggests per-story tasks (one task per repo with changes)
+4. Creates stories/tasks in Jira (or shows template)
+
+**Timeline:** ~5 minutes
+
+**Result:** Structured epic with Backend stories (toolkit-ready) + Frontend stories (separate team) + QA stories
+
+### Step 2: Execute the Epic
+
+Your epic is now structured. **Run:**
 
 ```bash
 /msad-dev-epic DDIDNS-7732
@@ -82,23 +123,40 @@ You have a Jira epic. **Just run:**
 
 **What happens (automatically):**
 
-1. **Discover** → Fetch epic, list all linked tasks/stories, find existing PRs
-2. **Classify** → Identify partial PRs (gaps to close), complete PRs, not-started tasks
-3. **Dispatch** → Launch parallel subagents (one per work item)
+1. **Discover** → Fetch epic, list all Backend stories/tasks, find existing PRs
+2. **Classify** → Identify partial PRs (gaps to close), complete PRs, not-started tasks; **filter out Frontend/UI tasks**
+3. **Dispatch** → Launch parallel subagents (one per Backend work item)
 4. **Consolidate** → Collect results, verify tests + coverage
-5. **Report** → "All 7 PRs ready for human review"
+5. **Report** → "All 7 Backend PRs ready for human review. 3 Frontend tasks excluded (separate team)."
 
 **Timeline:** ~20 minutes total (parallel execution)
 
-**Result:** All PRs ready for human review + merge
+**Result:** All Backend PRs ready for human review + merge; Frontend team works in parallel
 
 ---
 
-## Advanced: Detailed Planning + Execution
+## Other Epic Patterns
+
+### Story-Level Execution (Faster Single-Story Focus)
+
+```bash
+/msad-dev-story DDIDNS-10562
+```
+
+Same discovery, classification, and dispatch as epic skill, but **scoped to one story** (fewer agents, typically 2–4 instead of 6–8). Excludes Frontend/UI tasks.
+
+**Timeline:** ~10–15 minutes
+
+**When to use:**
+- You want to complete a single story within an epic
+- Faster than full epic orchestration
+- Still gets Backend/Frontend filtering and consolidated reporting
+
+### Advanced: Detailed Planning + Execution
 
 If you want explicit approval gates or detailed analysis before execution:
 
-### Step 1: Generate Detailed Plan
+#### Step 1: Generate Detailed Plan
 
 ```bash
 /msad-dev-planning DDIDNS-7732
@@ -106,41 +164,188 @@ If you want explicit approval gates or detailed analysis before execution:
 
 **What happens:**
 - Reads epic + all linked tasks
-- Groups work by repo, identifies dependencies
+- Groups work by repo, identifies dependencies, **classifies Backend vs. Frontend/UI**
 - Runs fresh-context reviewer to catch gaps
 - Presents plan for your approval
 
-### Step 2: Execute Approved Plan
+#### Step 2: Execute Approved Plan
 
 ```bash
 /msad-dev-execution DDIDNS-7732
 ```
 
 **What happens:**
-- Dispatches implementation agents per work package
+- Dispatches implementation agents per Backend work package
 - Runs tests (docker-compose, go test, dotnet test)
 - Validation loop (≤3 rounds): code review → findings → fixes
-- Opens draft PRs when all gates pass
+- Opens draft PRs when all Backend gates pass
+- Reports excluded Frontend/UI tasks
 
 ---
 
-## Architecture: Three-Tier Automation
+## Architecture: Four-Tier Automation
 
 ```
-Tier 1: /msad-dev-planning (10 min)
-  ↓ Detailed phase-by-phase analysis + approval gate
+Tier 0: /msad-epic-planner (5 min) ← START HERE for new epic
+  ↓ Structure epic into Backend/Frontend/QA stories
   
-Tier 2: /msad-dev-epic (20 min) ← RECOMMENDED (NEW)
-  ↓ Automated discovery + parallel agent dispatch
+Tier 1: /msad-dev-planning (10 min) ← for detailed approval gates
+  ↓ Generate detailed implementation plan
   
-Tier 3: /msad-dev-execution (20 min)
+Tier 2a: /msad-dev-epic (20 min) ← RECOMMENDED for full epic release
+  ↓ Orchestrate all stories + tasks, automated discovery
+  
+Tier 2b: /msad-dev-story (10–15 min) ← RECOMMENDED for single story
+  ↓ Orchestrate one story, faster granular execution
+  
+Tier 3: /msad-dev-execution (20 min) ← from approved plan
   ↓ Agent-driven implementation + validation loop
   
 Manual: /msad-backend-dev (10-30 min)
   ↓ Single-task implementation
 ```
 
-**Use Tier 2 for most work.** Use Tier 1 if you want detailed plan review first.
+**Typical flow:**
+1. Start with `/msad-epic-planner` (structure the epic once)
+2. Then use `/msad-dev-epic` or `/msad-dev-story` (execute repeatedly as stories change)
+
+---
+
+## Suggested Jira Structure for Toolkit Optimization
+
+The toolkit works best when epics and stories are structured thoughtfully. Here's the recommended pattern:
+
+### Epic Structure (Multi-Story Initiative)
+
+**Example: DDIDNS-7732 — Microsoft DNS Zone Creation with Replication Scope**
+
+```
+DDIDNS-7732 (Epic: "Microsoft DNS Zone Creation")
+├── DDIDNS-10562 (Story: "Backend — Support Domain/Forest Replication Scope")
+│   ├── DDIDNS-10519 (Task: middleware — request transformation)
+│   ├── DDIDNS-10542 (Task: middleware — idempotency)
+│   ├── DDIDNS-10543 (Task: collector — error-code mapping)
+│   └── DDIDNS-10546 (Task: dns.config — audit logging)
+│
+├── DDIDNS-10563 (Story: "Frontend — Portal UI for Replication Scope Selection")
+│   ├── DDIDNS-10544 (Task: Portal selector component)
+│   ├── DDIDNS-10548 (Task: Portal form validation)
+│   └── DDIDNS-10545 (Task: Portal documentation)
+│
+└── DDIDNS-10567 (Story: "QA — E2E Testing for Zone Replication")
+    ├── DDIDNS-10510 (Task: test plan)
+    └── DDIDNS-10511 (Task: automation)
+```
+
+**Best Practices:**
+
+1. **Separate Backend and Frontend stories.** Tag story title with `"Backend —"` or `"Frontend —"` or `"Portal —"` so the toolkit can classify and filter automatically.
+2. **One logical concern per story.** Each story represents a deliverable unit (e.g., "Support Domain/Forest scopes" vs. "Portal UI for scope selection").
+3. **Backend stories contain backend tasks only.** Frontend stories contain UI tasks only. Don't mix.
+4. **Link all tasks to exactly one story.** The toolkit expects a clean hierarchy: Epic → Stories → Tasks.
+5. **Use consistent naming:** Task title should mention the repo or layer (e.g., "middleware: support Domain/Forest", "collector: add error codes", "dns.config: validation").
+
+**What the toolkit does:**
+- `/msad-dev-epic DDIDNS-7732` orchestrates all Backend stories (skips Frontend stories, lists them as excluded)
+- `/msad-dev-story DDIDNS-10562` orchestrates a single Backend story (faster, fewer agents)
+- Frontend stories are explicitly noted as "managed by separate team"
+
+### Story Structure (Focused Deliverable)
+
+**Example: DDIDNS-10562 — Backend Support for Domain/Forest Replication Scope**
+
+```
+DDIDNS-10562 (Story: "Backend — Support Domain/Forest Replication Scope on Zone Creation")
+  
+Description:
+  Add support for Domain and Forest replication scopes on zone creation requests.
+  This enables users to create Microsoft DNS zones with different replication scopes
+  via the WAPI v3 API.
+
+Acceptance Criteria:
+  ✓ WAPI v3 accepts replication_scope = "domain" and "forest" on zone creation
+  ✓ Values are validated at each layer (dns.config, middleware, collector)
+  ✓ Middleware forwards correct scope to MSAD collector
+  ✓ Error codes are mapped correctly (invalid scope → 400 Bad Request)
+  ✓ Existing tests pass; new tests cover scope validation
+
+Linked Tasks:
+  ├── DDIDNS-10519 (Task: ddi.cloud.proxy.middleware: validate & transform)
+  ├── DDIDNS-10542 (Task: ddi.cloud.proxy.middleware: idempotency)
+  ├── DDIDNS-10543 (Task: ddi.msad.collector: error-code mapping)
+  └── DDIDNS-10546 (Task: ddi.dns.config: audit logging)
+```
+
+**Best Practices:**
+
+1. **Clear AC mapping.** Each AC maps to one or more tasks. The toolkit verifies all ACs are covered in the plan.
+2. **Repo-scoped tasks.** Each task title mentions the repo (middleware, collector, dns.config) so the toolkit can organize work by repo.
+3. **Single story focus.** A story is one vertical slice (one replication-scope feature, one error-code addition). Don't bundle unrelated work.
+4. **"Backend —" prefix.** Use this to signal the toolkit that the story is backend-only (not Portal UI). Frontend stories use `"Frontend —"` or `"Portal —"`.
+
+**What the toolkit does:**
+- `/msad-dev-story DDIDNS-10562` discovers all linked tasks, classifies Backend (skips any with UI keywords), finds existing PRs, and orchestrates 4 agents in parallel
+- Typical timeline: 10–15 minutes (all Backend work done, ready for review)
+
+### Backend vs. Frontend Task Naming
+
+The toolkit uses keyword matching to classify tasks automatically. Here's the signal list:
+
+**Backend signals** (task will be automated by toolkit):
+- Repo names: `middleware`, `collector`, `agent`, `dns.config`, `dns.data`, `proxy`
+- Layer names: `backend`, `API`, `gRPC`, `validation`, `handler`, `interceptor`
+- Examples:
+  - `"middleware: support Domain/Forest replication scope"`
+  - `"collector: add error-code mapping for ZONE-005"`
+  - `"dns.config: validate replication scope"`
+
+**Frontend/UI signals** (task will be flagged as excluded, managed separately):
+- UI keywords: `portal`, `UI`, `frontend`, `form`, `selector`, `editor`, `component`, `view`
+- Examples:
+  - `"Portal selector for replication scope"`
+  - `"Frontend form validation for scope changes"`
+  - `"UI component for zone configuration"`
+
+**Default:** If a task name has no signals (ambiguous), the toolkit classifies it as **Backend** and dispatches it. To ensure a task is excluded, use explicit Frontend/UI keywords.
+
+### Example: Full Epic to Story Hierarchy
+
+```
+DDIDNS-7732 (Epic: "Microsoft DNS Zone Creation with Replication Scope")
+  
+├─ Story 1: DDIDNS-10562 "Backend — Zone Creation with Scope"
+│  │
+│  ├─ Task: "ddi.cloud.proxy.middleware: transform scope in gRPC request"
+│  ├─ Task: "ddi.cloud.proxy.middleware: add idempotency check"
+│  ├─ Task: "ddi.msad.collector: map ZONE-005 error code"
+│  └─ Task: "ddi.dns.config: validate replication scope on create"
+│  
+│  [/msad-dev-story DDIDNS-10562 → orchestrates 4 agents → 15 min]
+│
+├─ Story 2: DDIDNS-10563 "Frontend — Portal UI for Scope Selection"
+│  │
+│  ├─ Task: "Portal: add selector component for scope"
+│  ├─ Task: "Portal: add form validation"
+│  └─ Task: "Portal: update documentation"
+│  
+│  [NOT orchestrated by toolkit — managed by Frontend team]
+│
+└─ Story 3: DDIDNS-10567 "QA — E2E Testing"
+   │
+   ├─ Task: "test plan for scope changes"
+   └─ Task: "CI/CD automation"
+   
+   [/msad-e2e-verify covers API-level testing]
+
+Full Epic Flow:
+  /msad-dev-epic DDIDNS-7732
+  ├─ Discovers: 3 stories (1 Backend, 1 Frontend, 1 QA)
+  ├─ Classifies: Backend story + tasks → dispatch; Frontend story → exclude
+  ├─ Dispatch: Orchestrates Backend story (4 agents)
+  └─ Report: "4/4 Backend PRs ready. 1 Frontend story excluded (managed separately)."
+  
+  Timeline: ~20 min for Backend track; Frontend track runs in parallel
+```
 
 ---
 
@@ -531,29 +736,111 @@ PRs from this toolkit follow the pattern set by existing DDIDNS-7732 work:
 
 ---
 
-## See Also
+## Troubleshooting & FAQ
 
-- **[agents/README.md](agents/README.md)** — Agent details
-- **[skills/README.md](skills/README.md)** — Skill details
-- **[references/repo-topology.md](references/repo-topology.md)** — Repo reference (stacks, commands, validators)
-- **[DDIDNS-7732 Epic](https://infoblox.atlassian.net/browse/DDIDNS-7732)** — The Microsoft DNS zone creation epic
-- **[architecture-hub](https://github.com/Infoblox-CTO/architecture-hub)** — Specs and contracts
+### "My epic has no stories/tasks yet. What do I do?"
+
+Use `/msad-epic-planner EPIC-ID` to analyze the epic and generate a recommended structure. It creates Backend/Frontend/QA stories with repo-scoped tasks automatically.
+
+### "Can I run this on an epic with mixed Backend/Frontend tasks?"
+
+Yes! The toolkit automatically classifies Backend vs. Frontend/UI tasks using keywords. Frontend tasks are excluded from dispatch and reported as "managed by separate team". **See [Backend vs. Frontend Task Naming](#backend-vs-frontend-task-naming) for the signal keywords.**
+
+### "How do I execute just one story instead of the full epic?"
+
+Use `/msad-dev-story STORY-ID` for faster, single-story orchestration (10-15 min vs 20 min for full epic). Same Backend/Frontend filtering applies.
+
+### "What if a task fails during execution?"
+
+The failing agent will stop and report the issue. You have three options:
+1. **Fix locally** and restart the agent with more context
+2. **Skip the task** and run other tasks (manual completion later)
+3. **Ask for detailed plan** via `/msad-dev-planning` for more control
+
+### "Do I need to structure the epic in a specific way?"
+
+Yes, for optimal toolkit performance. **See [Suggested Jira Structure](#suggested-jira-structure-for-toolkit-optimization)** for the recommended Epic → Story → Task hierarchy. Or use `/msad-epic-planner` to generate it.
+
+### "What repos should I expect PRs in?"
+
+Depends on your task. **See [references/repo-topology.md](references/repo-topology.md) for which repos are involved**. For zone creation tasks, expect PRs in: dns.config, dns.data, middleware, collector, agent.
+
+### "Can I use this for non-MSAD work?"
+
+This toolkit is MSAD-specific (zone creation, replication scope, error codes, Windows agent). For other work, see if `architecture-hub` has other toolkit templates.
+
+### "How do I troubleshoot a plan?"
+
+Use `/msad-dev-planning EPIC-ID` with the `--edit` or `--review` flags to audit the plan interactively. The plan auto-review agent flags gaps, unclear dependencies, and missing AC coverage.
+
+### "Are there limits on epic size?"
+
+No hard limits, but practical guidance:
+- **Small epic (1–2 stories, 3–5 tasks):** Use `/msad-dev-story` (faster)
+- **Medium epic (3–5 stories, 10–15 tasks):** Use `/msad-dev-epic` (20 min)
+- **Large epic (6+ stories, 20+ tasks):** Use `/msad-dev-planning` first for detailed coordination
+
+---
+
+## References — Documentation
+
+**Getting Started:**
+- **[CLAUDE.md](CLAUDE.md)** — Fork pattern setup (one-time)
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — Contribution workflow, 6-repo setup
+
+**Skill & Agent Details:**
+- **[skills/README.md](skills/README.md)** — All 7 skills + dependency chain
+  - `/msad-epic-planner` — Structure epics (NEW)
+  - `/msad-dev-epic` — Execute epic (updated)
+  - `/msad-dev-story` — Execute story (NEW)
+  - `/msad-dev-planning` — Detailed plan
+  - `/msad-developer` — Router
+  - `/msad-dev-execution` — From approved plan
+  - `/msad-e2e-verify` — API-level E2E tests
+- **[agents/README.md](agents/README.md)** — Agent details + MSAD checklist
+
+**Reference Material:**
+- **[references/repo-topology.md](references/repo-topology.md)** — 6 repos (stack, commands, validators, files, contracts)
+- **[references/default-branches.md](references/default-branches.md)** — Per-repo default branch
+- **[references/git-commit-discipline.md](references/git-commit-discipline.md)** — Commit patterns
+- **[references/plan-reviewer-prompt.md](references/plan-reviewer-prompt.md)** — Plan review checklist
+
+**External Links:**
+- **[DDIDNS-7732 Epic](https://infoblox.atlassian.net/browse/DDIDNS-7732)** — The canonical zone creation epic
+- **[architecture-hub](https://github.com/Infoblox-CTO/architecture-hub)** — Specs, contracts, design docs
+- **[Infoblox-CTO GitHub](https://github.com/Infoblox-CTO)** — All 6 canonical repos
 
 ---
 
 ## Getting Started
 
-1. **Install the toolkit** (add as plugin or symlink)
-2. **Pick an epic** (Jira epic ID like DDIDNS-7732)
-3. **One command:**
-   ```bash
-   /msad-dev-epic DDIDNS-7732
-   ```
-4. **Wait ~20 minutes** for agents to complete
-5. **Review draft PRs** when notified
-6. **Approve & merge** when ready
+### Fastest Path (Recommended)
 
-**Detailed planning?** Use `/msad-dev-planning` first for explicit approval gates.
+1. **Install the toolkit** — See [Installation](#installation)
+2. **Have a Jira epic** (e.g., DDIDNS-7732)
+3. **Three commands:**
+   ```bash
+   /msad-epic-planner DDIDNS-7732    # (5 min) Structure the epic
+   /msad-dev-epic DDIDNS-7732        # (20 min) Execute all Backend stories in parallel
+   ```
+4. **Review draft PRs** when notified (parallel to Frontend team's work)
+5. **Approve & merge** when ready
+
+### Alternative: Detailed Planning + Execution
+
+For more control or complex dependencies:
+
+```bash
+/msad-dev-planning DDIDNS-7732      # (10 min) Generate detailed plan + auto-review
+# → Approve plan
+/msad-dev-execution DDIDNS-7732     # (20 min) Execute with validation loop (≤3 rounds)
+```
+
+### For Single Story (Faster)
+
+```bash
+/msad-dev-story DDIDNS-10562        # (10-15 min) Execute one story
+```
 
 ---
 

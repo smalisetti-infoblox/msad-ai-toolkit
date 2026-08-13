@@ -9,7 +9,7 @@ created_by:
 
 # MSAD Developer — Router
 
-Entry-point skill for MSAD development work spanning five repos (ddi.dns.config, ddi.cloud.proxy.middleware, ddi.msad.collector, ddi.msadconnect.proxy, ddi.msad.agent).
+Entry-point skill for MSAD development work spanning six repos (ddi.dns.config, ddi.dns.data, ddi.cloud.proxy.middleware, ddi.msad.collector, ddi.msadconnect.proxy, ddi.msad.agent).
 
 Classifies the input and suggests the correct downstream skill. Freehand MSAD implementation work is forbidden — the specialist skills exist for a reason.
 
@@ -57,13 +57,14 @@ User invokes suggested skill; you don't auto-chain
 
 Load `references/repo-topology.md` from this toolkit. Service/component names in the input map to repos:
 
-- "ddi.dns.config", "WAPI v3", "zone creation portal surface" → `ddi.dns.config`
-- "ddi.cloud.proxy.middleware", "cloud proxy", "MSAD interceptor" → `ddi.cloud.proxy.middleware`
+- "ddi.dns.config", "WAPI v3", "zone creation API" → `ddi.dns.config`
+- "ddi.dns.data", "WAPI v3 data layer", "zone data retrieval" → `ddi.dns.data`
+- "ddi.cloud.proxy.middleware", "cloud proxy", "MSAD interceptor" → `ddi.cloud.proxy.middleware` (consumed by both dns.config and dns.data)
 - "ddi.msad.collector", "error code mapping", "gRPC service" → `ddi.msad.collector`
-- "ddi.msadconnect.proxy", "proxy" → `ddi.msadconnect.proxy`
+- "ddi.msadconnect.proxy", "proxy", "RPC bridge" → `ddi.msadconnect.proxy`
 - "ddi.msad.agent", "PowerShell", "Windows Service", "zone controller" → `ddi.msad.agent`
 
-If a task mentions a service/component that doesn't map to the five repos, tell the user which repo(s) you think are involved and ask for confirmation.
+If a task mentions a service/component that doesn't map to the six repos, tell the user which repo(s) you think are involved and ask for confirmation.
 
 ## How This Skill Works
 
@@ -129,7 +130,7 @@ If a task mentions a service/component that doesn't map to the five repos, tell 
 
 - **Atlassian MCP unavailable / Jira lookup fails:** fall back to prose-shape classification. Ask the user to confirm whether the input is an epic, story, or task.
 - **Input is a non-DDIDNS Jira ID** (e.g., DDIDHCP): the suite is MSAD-scoped. Tell the user this skill suite doesn't cover the project; suggest the appropriate team's workflow.
-- **Input is ambiguous** (e.g., "add replication scope validation" with no Jira context): ask which of the five repos the change targets, or suggest running the Jira lookup first.
+- **Input is ambiguous** (e.g., "add replication scope validation" with no Jira context): ask which of the six repos the change targets, or suggest running the Jira lookup first.
 - **User insists on freehand work:** state the regression cost (no planning gate, no multi-round review, no structured PR) and proceed only if explicitly authorized. Record the override in the PR body.
 
 ## Specialist Skills Index

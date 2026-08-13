@@ -1,7 +1,11 @@
 #!/bin/bash
 # phase-detector.sh
 #
-# Improvement 2: Detect Phases & Functional Areas
+# Design reference for Improvement 2: Detect Phases & Functional Areas
+#
+# STATUS: Functional area detection (Backend vs. Frontend/UI keywords) has been promoted
+# into SKILL.md Step 2b (Functional Area Classification). This script is a reference
+# implementation for phase and area keyword matching logic.
 #
 # Analyzes Jira task summaries and status to detect:
 #   1. Phases (e.g., Phase 1: CREATE, Phase 2: UPDATE)
@@ -9,7 +13,7 @@
 #
 # Detection logic:
 #   - Keywords in summary: "create" → Phase 1, "update"/"change" → Phase 2
-#   - Keywords: "portal"/"UI" → Portal, "audit"/"log" → Audit, "test"/"QA" → QA
+#   - Keywords: "portal"/"UI"/"frontend" → Frontend/UI, "backend"/"middleware" → Backend, "audit"/"log" → Audit, "test"/"QA" → QA
 #   - Status clustering: if all Phase 1 tasks in DRAFT PR, Phase 2 tasks in "None" → deferred
 #
 # Input: CSV with columns: task_id,summary,status

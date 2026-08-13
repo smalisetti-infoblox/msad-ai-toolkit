@@ -6,9 +6,10 @@ Thank you for contributing! This toolkit uses a **fork-based model** to contribu
 
 ### 1. Fork the MSAD Repos
 
-For each of the five repos you'll work on, create a personal fork in GitHub:
+For each of the six repos you'll work on, create a personal fork in GitHub:
 
 - Fork [`Infoblox-CTO/ddi.dns.config`](https://github.com/Infoblox-CTO/ddi.dns.config)
+- Fork [`Infoblox-CTO/ddi.dns.data`](https://github.com/Infoblox-CTO/ddi.dns.data)
 - Fork [`Infoblox-CTO/ddi.cloud.proxy.middleware`](https://github.com/Infoblox-CTO/ddi.cloud.proxy.middleware)
 - Fork [`Infoblox-CTO/ddi.msad.collector`](https://github.com/Infoblox-CTO/ddi.msad.collector)
 - Fork [`Infoblox-CTO/ddi.msadconnect.proxy`](https://github.com/Infoblox-CTO/ddi.msadconnect.proxy)
@@ -79,7 +80,7 @@ git checkout -b DDIDNS-XXXXX-description upstream/$DEFAULT_BRANCH
 
 Follow the repo's own CLAUDE.md for language-specific conventions:
 
-**Go repos** (dns.config, middleware, collector, msadconnect.proxy):
+**Go repos** (dns.config, dns.data, middleware, collector, msadconnect.proxy):
 ```bash
 make fmt
 make lint
@@ -124,7 +125,7 @@ gh pr create --repo Infoblox-CTO/REPO-NAME \
 The toolkit includes agents that automate the fork pattern:
 
 ### msad-backend-dev
-Implements a full Jira task across the five-repo ecosystem:
+Implements a full Jira task across the six-repo ecosystem:
 ```bash
 /msad-ai-toolkit:msad-backend-dev DDIDNS-10562
 ```

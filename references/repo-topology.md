@@ -1,13 +1,14 @@
 # MSAD Repo Topology & Build Reference
 
-This document maps the five-repo ecosystem supporting the DDIDNS-7732 epic (Microsoft DNS zone creation / replication scope), lists build/test/lint commands, and identifies key files where replication-scope validation lives at each layer.
+This document maps the six-repo ecosystem supporting the DDIDNS-7732 epic (Microsoft DNS zone creation / replication scope), lists build/test/lint commands, and identifies key files where replication-scope validation lives at each layer.
 
 ## Repo Summary Table
 
 | Repo | Stack | Role | Local path | Build | Test |
 |---|---|---|---|---|---|
 | **ddi.dns.config** | Go 1.23+ | WAPI v3 API surface; owns replication-scope validation | `~/ddi.dns.config` | `make vendor` | `make test` |
-| **ddi.cloud.proxy.middleware** | Go 1.23+ | gRPC interceptor library; MSAD request translation | `~/ddi.cloud.proxy.middleware` | `make vendor` | `make test` |
+| **ddi.dns.data** | Go 1.23+ | WAPI v3 data layer; zone data retrieval and transformation | `~/ddi.dns.data` | `make vendor` | `make test` |
+| **ddi.cloud.proxy.middleware** | Go 1.23+ | gRPC interceptor library; MSAD request translation (consumed by dns.config and dns.data) | `~/ddi.cloud.proxy.middleware` | `make vendor` | `make test` |
 | **ddi.msad.collector** | Go 1.23+ | gRPC microservice; error-code mapping | `~/ddi.msad.collector` | `make vendor` | `make test` |
 | **ddi.msadconnect.proxy** | Go (not yet surveyed) | Windows RPC/LDAP bridge | `~/ddi.msadconnect.proxy` | `make vendor` | `make test` |
 | **ddi.msad.agent** | C#/.NET 8 (net8.0-windows) | Windows Service; PowerShell zone controllers | `~/ddi.msad.agent` | `dotnet build MSADAgent\MSADAgent.sln -c Debug` | `dotnet test MSADAgent\Agent.Tests\Agent.Tests.csproj` |
@@ -77,6 +78,10 @@ Key service for this epic: **Zones** (methods: Create, Update, Delete, List, Get
 - `pkg/service/application/forward_zone.go` — forward-zone-specific validation (scope-change allowed per DDIDNS-10547)
 - `pkg/messages/messages.go` — `ErrStubZoneInvalidReplicationScope` error const
 - `*_test.go` — table-driven tests using sqlmock, test fixtures in sibling dirs
+
+### ddi.dns.data
+
+**Not yet surveyed.** On first task involving ddi.dns.data, confirm exact validator/file names, whether ddi.cloud.proxy.middleware is a direct dependency, and which validation/conversion logic lives here vs. in ddi.dns.config.
 
 ### ddi.cloud.proxy.middleware
 
@@ -378,13 +383,14 @@ Quick summary:
 
 1. **Collector proto → Middleware client:** any change to `ddi.msad.collector/api/protobuf-spec/service.proto` must trigger `make protobuf` in the middleware to regenerate `pkg/pb/`.
 2. **Error-code addition in collector:** if a new `ZONE-00x` agent error code is created, `ddi.msad.collector/pkg/util/util.go:ErrorCodeToStatus()` must be updated and tested (e.g., DDIDNS-10543 added `ZONE-005` → `codes.InvalidArgument`).
-3. **Replication-scope validator change:** any update to `isValidMSADReplicationScope*` in the middleware must be echoed in `dns.config`'s equivalent validators to stay in sync (currently they're mirrors).
+3. **Replication-scope validator change:** any update to `isValidMSADReplicationScope*` in the middleware must be echoed in validators across **both** `dns.config` and `dns.data` (currently mirrors in dns.config; dns.data mirrors will need parity once surveyed). Since the middleware is consumed by two independent WAPI services, validator-sync is now a 3-repo discipline, not 2-repo.
+4. **Middleware consumed by two services:** `ddi.cloud.proxy.middleware` is now a shared dependency of both `ddi.dns.config` and `ddi.dns.data`. Changes to its request builders, interceptors, or error mappings require validation in both consumers to ensure consistent behavior.
 
 ---
 
 ## Dependency Repos (Not Core, Not Modified by Default)
 
-These repos are **not part of the five-repo core list**, but are referenced/imported by them. Changes to these repos may affect MSAD epic work, but this toolkit does not own or modify them.
+These repos are **not part of the six-repo core list**, but are referenced/imported by them. Changes to these repos may affect MSAD epic work, but this toolkit does not own or modify them.
 
 | Repo | Dependency Of | Local Path | Role | How to Update |
 |---|---|---|---|---|
@@ -393,16 +399,16 @@ These repos are **not part of the five-repo core list**, but are referenced/impo
 
 ### How to Discover More Dependency Repos
 
-If a task scope expands beyond the five core repos, use these methods to find hidden dependencies (so this list doesn't go stale):
+If a task scope expands beyond the six core repos, use these methods to find hidden dependencies (so this list doesn't go stale):
 
 1. **grep go.mod/go.sum for Infoblox-CTO imports:**
    ```bash
-   for repo in ddi.dns.config ddi.cloud.proxy.middleware ddi.msad.collector ddi.msadconnect.proxy; do
+   for repo in ddi.dns.config ddi.dns.data ddi.cloud.proxy.middleware ddi.msad.collector ddi.msadconnect.proxy ddi.msad.agent; do
      echo "=== $repo ===" 
      grep "github.com/Infoblox-CTO/" ~/$repo/go.mod | grep -v "^#"
    done
    ```
-   List any `Infoblox-CTO/` imports not in the five-repo list.
+   List any `Infoblox-CTO/` imports not in the six-repo list.
 
 2. **grep proto files for go_package headers:**
    ```bash
@@ -424,11 +430,12 @@ If a task scope expands beyond the five core repos, use these methods to find hi
 
 When planning MSAD work, check for related open/merged PRs to avoid duplicating or conflicting with ongoing work. Use these commands (requires `gh` authenticated with GitHub):
 
-### Core Five-Repo PRs
+### Core Six-Repo PRs
 
 ```bash
 # List open PRs in each core repo
 gh pr list --repo Infoblox-CTO/ddi.dns.config --state open --limit 15
+gh pr list --repo Infoblox-CTO/ddi.dns.data --state open --limit 15
 gh pr list --repo Infoblox-CTO/ddi.cloud.proxy.middleware --state open --limit 15
 gh pr list --repo Infoblox-CTO/ddi.msad.collector --state open --limit 15
 gh pr list --repo Infoblox-CTO/ddi.msadconnect.proxy --state open --limit 15
@@ -436,6 +443,7 @@ gh pr list --repo Infoblox-CTO/ddi.msad.agent --state open --limit 15
 
 # Search for PRs mentioning a specific Jira ID (e.g., DDIDNS-7732)
 gh pr list --repo Infoblox-CTO/ddi.dns.config --search "DDIDNS-7732" --limit 15
+gh pr list --repo Infoblox-CTO/ddi.dns.data --search "DDIDNS-7732" --limit 15
 ```
 
 ### Dependency Repo PRs

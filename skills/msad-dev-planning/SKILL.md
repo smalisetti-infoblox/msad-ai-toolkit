@@ -74,6 +74,30 @@ Use Atlassian MCP tools:
 
 Produce a structured summary: **fact** (verbatim from Jira), **inference** (derived), **assumption** (proceeding without confirmation).
 
+## Step 2b — Functional Area Classification (Backend vs. Frontend/UI)
+
+For each linked ticket (epic's stories/tasks), classify as **Backend** or **Frontend/UI** using keyword matching against the ticket's summary/title:
+
+**Frontend/UI signals** (any of these → classify as Frontend/UI):
+- "portal", "UI", "frontend", "form", "selector", "editor"
+
+**Backend signals** (any of these → classify as Backend):
+- "middleware", "collector", "agent", "dns.config", "dns.data", "proxy", "backend"
+
+**Default:** If no frontend signals match and backend signals are present (or none are present), classify as **Backend**.
+
+**Output:** A **Scope Boundaries** table marking each ticket:
+- ✅ **Backend** (in scope for this toolkit, will be dispatched to `msad-backend-dev`)
+- 🚫 **Frontend/UI** (out of scope, not implemented by `msad-backend-dev`, managed by a separate team/track)
+
+Example:
+
+| Task | Classification | Summary | Notes |
+|---|---|---|---|
+| DDIDNS-10519 | ✅ Backend | Middleware: Domain/Forest scope | Will be dispatched |
+| DDIDNS-10544 | 🚫 Frontend/UI | Portal selector for replication scope | Separate track, excluded from dispatch |
+| DDIDNS-10546 | ✅ Backend | DNS Config: audit logging | Will be dispatched |
+
 ### Questions to Surface
 
 - **Is this ticket part of DDIDNS-7732 (Microsoft DNS zone creation epic)?** If yes, run `gh pr list` (Step 3 below) to discover current related work dynamically, rather than using stale hardcoded PR numbers.
@@ -81,7 +105,9 @@ Produce a structured summary: **fact** (verbatim from Jira), **inference** (deri
 - **Does this touch a proto file?** If yes, flag that vendored generated code in downstream repos must be regenerated.
 - **Does this involve the Windows agent (ddi.msad.agent)?** If yes, note that local testing is impossible; Windows CI is the verification gate.
 
-## Step 3 — Repo Context
+## Step 3 — Repo Context (Backend-Only for This Toolkit)
+
+Note: After Step 2b classification, Step 3 and onwards focus only on **Backend-classified tickets**. Frontend/UI tickets (🚫) are documented in the plan's Scope Boundaries but not analyzed for repo context or implementation details in this toolkit.
 
 ### Read Per-Repo CLAUDE.md (CRITICAL)
 
@@ -179,9 +205,9 @@ Ask only what can't be answered from Jira, the repo, or linked tickets. If the a
 
 **Red flag:** If you can't determine which repos are involved, or if the task is silent on replication-scope constraints (creation vs. update), ask explicitly.
 
-## Step 7 — Write Plan & Self-Critique
+## Step 7 — Write Plan with Explicit Scope Boundaries
 
-Plan file template (mandatory sections):
+Plan file template (mandatory sections — note: Scope Boundaries section is now mandatory and references the Step 2b classification):
 
 ```markdown
 ---
@@ -202,8 +228,8 @@ created: YYYY-MM-DD
 - **Jira:** ticket link + parent epic + linked tickets
 - **Prior work:** related PRs (from `gh pr list`), commits, existing implementations
 - **Repos involved:** `<list>`, each with 1–2 sentence role
-- **Dependency repos in scope:** (if any beyond the five core repos; e.g., atlas.onprem.rpc.server for agent/proxy work)
-- **Constraints:** Windows-only testing? Proto-dependent? Cross-repo validator sync?
+- **Dependency repos in scope:** (if any beyond the six core repos; e.g., atlas.onprem.rpc.server for agent/proxy work)
+- **Constraints:** Windows-only testing? Proto-dependent? Cross-repo validator sync? Frontend/UI tasks deferred?
 
 ## Per-Repo Work Packages
 
@@ -397,6 +423,6 @@ Four possible responses:
 ## Error Handling
 
 - **Atlassian MCP unavailable:** ask the user to paste the Jira summary, description, and AC verbatim. Mark all derived facts as `source: user-pasted`.
-- **Repo not detected:** ask the user to confirm which of the five repos the task targets.
+- **Repo not detected:** ask the user to confirm which of the six repos the task targets.
 - **Clarifying questions can't be resolved:** list them as blocking in Step 6 and ask the user before proceeding.
 - **User response to Step 8 is ambiguous:** ask explicitly which of the four options applies.
