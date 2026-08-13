@@ -33,11 +33,12 @@ Step 1: Discovery
   ├─ List all linked tasks/stories
   ├─ Discover existing PRs (gh pr list per repo)
   ├─ Classify: partial vs. complete vs. not-started
-  └─ Identify gaps per PR
+  ├─ Identify gaps per PR
+  └─ NEW: Fetch & analyze PR review comments (blocking vs. non-blocking)
 
-Step 2: Dispatch Subagents (Parallel)
-  ├─ For each partial PR:
-  │   └─ Agent: analyze gap → add tests → verify coverage → commit → push
+Step 2: Dispatch Subagents (Parallel, Prioritized)
+  ├─ For each partial PR with review feedback:
+  │   └─ Agent: address gaps + blocking comments → verify coverage → commit → push
   ├─ For each complete PR:
   │   └─ Agent: run tests → verify CI → ready for review
   └─ For each not-started task:
@@ -47,6 +48,7 @@ Step 3: Consolidate & Report
   ├─ Collect all results
   ├─ Verify all tests passing
   ├─ Verify all coverage ≥80%
+  ├─ Track which review comments were addressed
   ├─ Generate per-PR summary
   └─ Return: status (ready-for-review / issues-found)
 ```
@@ -174,6 +176,20 @@ Dispatches agents only for active phase tasks unless `--all-phases` flag used.
 - [ ] Automatic PR merge when all gates pass (currently human gate only)
 - [ ] Integration with JIRA transitions (mark task "In Progress" / "Done")
 - [ ] Slack notifications per agent completion
+
+## Review Comment Handling (NEW)
+
+The skill discovers and prioritizes existing PR review comments:
+
+- **Blocking comments** (e.g., "Coverage must be ≥92%") → Must address
+- **Non-blocking comments** (e.g., "Consider refactoring X") → Should address
+- **Informational comments** → Acknowledge in PR body
+
+Agents receive comment context and address feedback systematically. Final PR body documents which comments were resolved.
+
+**Learn more:** See [REVIEW-COMMENT-HANDLING.md](REVIEW-COMMENT-HANDLING.md) and [COMMENT-INTEGRATION-GUIDE.md](COMMENT-INTEGRATION-GUIDE.md)
+
+---
 
 ## Related Skills
 
