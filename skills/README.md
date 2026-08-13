@@ -8,7 +8,7 @@ Six orchestration skills that drive the multi-repo MSAD development workflow. Ea
 
 | Skill | Use When | Invokes |
 |---|---|---|
-| **msad-epic-planner** | You have a rough epic idea; need to structure it | Atlassian MCP (creates stories/tasks) |
+| **msad-dev-plan-epic** | You have a rough epic idea; need to structure it | Atlassian MCP (creates stories/tasks) |
 | **msad-developer** | You have a Jira task (epic/story) | Nothing (suggests planning or execution) |
 | **msad-dev-planning** | You need a detailed plan (plan doesn't exist yet) | No sub-agents (dispatches reviewer internally) |
 | **msad-dev-epic** | You have a structured epic; want to orchestrate all stories + tasks | Parallel msad-backend-dev agents (Backend tasks only) |
@@ -69,7 +69,7 @@ User: /msad-dev-planning DDIDNS-10519
 
 ---
 
-## msad-epic-planner (Epic Structurer)
+## msad-dev-plan-epic (Epic Structurer)
 
 **Analyzes a Jira epic and generates a recommended structure of stories and backend/frontend tasks.**
 
@@ -78,7 +78,7 @@ Helps you organize an epic into well-structured stories (Backend, Frontend, QA) 
 ### Usage
 
 ```
-User: /msad-epic-planner DDIDNS-7732
+User: /msad-dev-plan-epic DDIDNS-7732
 ```
 
 Input: Epic ID
@@ -102,7 +102,7 @@ Output:
 ### Example Flow
 
 ```
-User: /msad-epic-planner DDIDNS-7732
+User: /msad-dev-plan-epic DDIDNS-7732
 
 Planner: Analyzing epic...
   ✓ Feature: Zone creation with replication scopes
@@ -441,7 +441,7 @@ Deferred: Real MSAD agent (Windows CI), AD replication (stage testing)
 ```
        Rough Epic Idea
          ↓
-  /msad-epic-planner ← Structure the epic (stories/tasks)
+  /msad-dev-plan-epic ← Structure the epic (stories/tasks)
          ↓
    (analyzes scope)
          ↓
@@ -483,7 +483,7 @@ Deferred: Real MSAD agent (Windows CI), AD replication (stage testing)
 ```
 
 **Recommended flow for epic release:**
-1. `/msad-epic-planner DDIDNS-7732` (structure: 5 min)
+1. `/msad-dev-plan-epic DDIDNS-7732` (structure: 5 min)
 2. `/msad-dev-epic DDIDNS-7732` (execute: 20 min)
 3. Review & merge PRs (parallel to Frontend team's work)
 
@@ -491,7 +491,7 @@ Deferred: Real MSAD agent (Windows CI), AD replication (stage testing)
 1. `/msad-dev-story DDIDNS-10562` (execute: 10-15 min)
 
 **For detailed planning + execution (more control):**
-1. `/msad-epic-planner DDIDNS-7732` (structure: 5 min)
+1. `/msad-dev-plan-epic DDIDNS-7732` (structure: 5 min)
 2. `/msad-dev-planning DDIDNS-7732` (plan: 10 min)
 3. `/msad-dev-execution DDIDNS-7732` (execute: 20 min)
 

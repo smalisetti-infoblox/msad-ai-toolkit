@@ -22,7 +22,7 @@
     "agent/msad-backend-dev": "0.1.0",
     "agent/msad-code-review": "0.1.0",
     "skill/msad-developer": "0.1.0",
-    "skill/msad-epic-planner": "0.1.0",
+    "skill/msad-dev-plan-epic": "0.1.0",
     "skill/msad-dev-planning": "0.1.0",
     "skill/msad-dev-epic": "0.1.0",
     "skill/msad-dev-story": "0.1.0",
