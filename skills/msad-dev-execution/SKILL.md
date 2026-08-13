@@ -72,7 +72,17 @@ State at start:
 State after each:
 > Package `<i>`/`<N>` done — `<repo>` `<task-id>`. Tests: `<pass/fail>`.
 
-## Step 3: Test Suite (Docker-Based) with Coverage Validation
+## Step 3: Per-Repo Testing & Validation
+
+Before running tests, **agents must follow each repo's specific conventions** from its CLAUDE.md and Makefile:
+
+- **Lint/Format workflow:** `make fmt` → `make lint` → `make test` (exact order, exact commands from Makefile)
+- **Go-specific:** `go fix ./...` before committing (handles Go version migrations)
+- **Coverage:** Report % and flag files below threshold
+- **Race detection:** Required for concurrent code (middleware, interceptor, gRPC handlers)
+- **Profiling:** Optional but recommended for latency-sensitive changes
+
+### Test Suite Execution (Docker-Based) with Coverage Validation
 
 For each work package's repo, run the standard test suite with Docker for all service dependencies, then validate coverage.
 

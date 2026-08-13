@@ -103,7 +103,22 @@ Key service for this epic: **Zones** (methods: Create, Update, Delete, List, Get
 
 ---
 
-## Build / Test / Lint Commands
+## Per-Repository Commands & Conventions
+
+### CRITICAL: Read CLAUDE.md and Makefile First
+
+**Before implementing any change:**
+
+1. **Read `<repo>/CLAUDE.md`** — authoritative guide for that repo (purpose, build/test, coding rules, pitfalls, safety rules)
+2. **Check `<repo>/Makefile`** — defines the actual commands to use:
+   - `make fmt` (repo-specific formatter)
+   - `make lint` (repo-specific linter)
+   - `make test` (repo-specific test command)
+   - `make vendor` (dependency management, Go repos)
+
+**Do not use generic commands.** Always use Makefile targets.
+
+### Build / Test / Lint Commands
 
 ### Setup: Docker for All Services
 
@@ -115,6 +130,22 @@ cd <repo>
 docker-compose up -d            # start PostgreSQL, Redis, etc.
 make test                       # tests assume services are running
 docker-compose down             # cleanup
+```
+
+### Format & Lint Workflow (All Repos)
+
+After code changes, run these **in order** and fix errors before proceeding:
+
+```bash
+make fmt                        # format code (repo-specific)
+make lint                       # check for issues (repo-specific)
+make test                       # run tests (repo-specific)
+```
+
+**Go repos only:** Before committing, also run:
+```bash
+go fix ./...                    # handle Go version migrations, deprecated APIs
+make fmt                        # re-format after go fix
 ```
 
 ### ddi.dns.config (Go)
@@ -279,22 +310,47 @@ docker-compose down
 
 ## Known Conventions
 
-### ddi.msad.agent
+### Source of Truth: Per-Repo CLAUDE.md
 
-- **CLAUDE.md** at repo root: concise AI-assistant guide (repo purpose, build/test, coding rules, pitfalls)
+**Every repo (Go and C#) has a CLAUDE.md at the root.** This is the authoritative guide for that repo. Read it before making any changes.
+
+CLAUDE.md contains:
+- Repo purpose and architecture overview
+- Build/test/lint/fmt commands (exact Makefile targets to use)
+- Coding rules: error handling, logging, naming, package structure, safety rules
+- Pitfalls and gotchas (e.g., "Registry access must go through Settings")
+- Links to docs-manifest.yaml, taxonomy.yaml (Go repos)
+- Any repo-specific tools or setup
+
+**If CLAUDE.md says something different from this document, follow CLAUDE.md.**
+
+### ddi.msad.agent (C#/.NET 8)
+
+- **CLAUDE.md** at repo root: authoritative guide (build, test, coding rules, pitfalls)
+  - Example rule: "Registry access must go through Settings library — core safety rule"
 - **docs-manifest.yaml**, **taxonomy.yaml** — machine-readable doc indexes
-- Registry access: **must go through Settings library** — core safety rule
+- **Makefile** or build scripts: use `make lint`, `make fmt`, `make test` (or equivalent from CLAUDE.md)
 - Proto committed alongside generated code (no separate codegen step)
 - Logging/metrics conventions documented in CLAUDE.md
+- xUnit for testing; follow naming conventions in Agent.Tests
 
-### All Go repos
+### All Go repos (dns.config, middleware, collector, msadconnect.proxy)
 
-- **CLAUDE.md** points to `docs-manifest.yaml` and `taxonomy.yaml` as authoritative
-- **Makefile** targets are normative (test, vendor, lint commands defined there, not inline)
-- **sqlmock** for DB-context tests (middleware, collector, dns.config)
-- **gomock** for gRPC/interface mocks (`go.uber.org/mock`, not golang/mock)
-- **Table-driven tests** via `[]struct{ ... }` patterns with nested `Setup` functions (collector in particular)
-- **testify** for assertions
+- **CLAUDE.md** at repo root: authoritative. Makefile points to docs-manifest.yaml and taxonomy.yaml
+- **Makefile** targets are normative:
+  - `make fmt` (exact formatter for this repo)
+  - `make lint` (exact linter(s) for this repo, e.g., golangci-lint, nilaway)
+  - `make test` (exact test command)
+  - `make vendor` (dependency management via go mod tidy + download)
+  - Don't call `go test` or `golangci-lint` directly unless CLAUDE.md says to
+- **Testing patterns (from inspection, but check CLAUDE.md):**
+  - **sqlmock** for DB-context tests (middleware, collector, dns.config)
+  - **gomock** for gRPC/interface mocks (`go.uber.org/mock`, not golang/mock)
+  - **Table-driven tests** via `[]struct{ ... }` patterns with nested `Setup` functions (collector in particular)
+  - **testify** for assertions
+- **Code quality:**
+  - `go fix ./...` before committing (handles Go version migrations, deprecated APIs)
+  - Run `make fmt` after `go fix` to ensure consistent formatting
 - **go.mod** declares the module; `make vendor` refreshes `vendor/` directory
 
 ---

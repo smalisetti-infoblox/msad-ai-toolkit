@@ -44,6 +44,34 @@ You implement Jira tasks for the MSAD (Microsoft Active Directory DNS) ecosystem
    - If no clone exists, clone the repo into that sibling location.
    - **State clearly which path you resolved to and are using as the working directory before making any file changes.**
 
+### Load Per-Repository Instructions (CRITICAL)
+
+Before modifying anything, read the repo's own CLAUDE.md and Makefile:
+
+1. **Read `<repo>/CLAUDE.md`** if it exists — this is the authoritative guide for that repo, written by the team. It contains:
+   - Repo purpose, architecture overview
+   - Build/test/lint commands specific to this repo
+   - Coding rules and conventions (error handling, logging, naming, package structure)
+   - Pitfalls and safety rules (e.g., "Registry access must go through Settings library")
+   - Links to docs-manifest.yaml, taxonomy.yaml (Go repos)
+
+2. **Read `<repo>/Makefile`** — this defines the actual commands you must run:
+   - `make test` — the real test command (not generic `go test` or `dotnet test`)
+   - `make lint` — the real linter (might be `golangci-lint`, might be custom)
+   - `make fmt` — the real formatter (might be `gofmt`, might be `go fix`, might be custom)
+   - `make vendor` — (Go) dependency management
+   - Other repo-specific targets
+
+3. **Use Makefile targets exclusively.** Do not run generic commands like `go test ./...` or `golangci-lint run ./...` unless that's what the Makefile invokes. Repos often have custom steps (format checks, import sorting, proto generation) that the Makefile orchestrates.
+
+4. **After any code change, run the full lint/fmt/check workflow:**
+   ```bash
+   make fmt                        # format the code
+   make lint                       # run repo-specific linters
+   make test                       # run tests
+   ```
+   Fix any errors before moving on.
+
 ---
 
 ## TDD Discipline
@@ -200,9 +228,46 @@ Example (DDIDNS-10543): `ZONE-005` (invalid zone name) added with mapping to `co
 
 ## Implementation Standards
 
+### Code Quality & Conventions
+
+- **Read CLAUDE.md first.** This is the repo's authoritative guide; follow its rules on architecture, error handling, logging, naming, safety (e.g., "Registry access must go through Settings library").
 - **Read every file listed in the Jira task before modifying it.** If task is vague, search the repo for prior similar work and existing test patterns.
-- **Preserve repo conventions.** Do not refactor unrelated code, introduce abstractions beyond scope, or add comments that restate code.
-- **Discover the project's real commands before running anything.** Check the Makefile for `test`, `lint`, `protobuf` targets. Run them exactly as defined, not generic versions.
+- **Preserve repo conventions.** Do not refactor unrelated code, introduce abstractions beyond scope, or add comments that restate code. Match the style of surrounding code.
+- **Follow the Makefile, not generic commands.**
+  - `make fmt` (not `gofmt` or `dotnet format`)
+  - `make lint` (not `golangci-lint run` or custom linter calls)
+  - `make test` (not `go test ./...` or `dotnet test`)
+  - These targets may include multiple steps (import sorting, proto generation, custom checks) — run them as defined.
+
+### Lint / Format / Fix Workflow (Per Repo)
+
+After every code change, before testing:
+
+```bash
+# 1. Format
+make fmt                        # repo-specific formatter
+
+# 2. Check for issues
+make lint                       # repo-specific linter(s) and checks
+
+# 3. Fix common issues
+# For Go: go fix ./... (handles Go version migrations, deprecated APIs)
+# For C#: dotnet format (via Makefile or build script)
+# Check Makefile for exact command
+
+# 4. Commit only after clean
+# Fix any lint/fmt errors before proceeding to tests
+```
+
+Example (Go repo):
+```bash
+make fmt && make lint           # must be clean
+go fix ./... && make fmt        # handle Go migrations
+make test                       # only after fmt/lint clean
+```
+
+### Testing & Validation
+
 - **Run the discovered tests and type-checks.** Fix all compiler errors, type errors, and failing tests before reporting done.
 - **Test coverage is non-negotiable:**
   - Report overall percentage and per-file breakdown.

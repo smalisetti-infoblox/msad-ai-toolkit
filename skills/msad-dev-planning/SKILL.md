@@ -83,6 +83,18 @@ Produce a structured summary: **fact** (verbatim from Jira), **inference** (deri
 
 ## Step 3 — Repo Context
 
+### Read Per-Repo CLAUDE.md (CRITICAL)
+
+For each involved repo, **read the CLAUDE.md at the repo root.** This is the authoritative guide and contains:
+- Repo purpose, architecture, build/test commands
+- Coding rules and conventions specific to that repo
+- Safety rules and pitfalls (e.g., ddi.msad.agent: "Registry access must go through Settings library")
+- Links to docs-manifest.yaml, taxonomy.yaml
+
+Recording example:
+> - **ddi.dns.config/CLAUDE.md:** Zone validation happens in pkg/service/application/. Use table-driven tests with sqlmock. Replication-scope validators must stay in sync with middleware. See docs-manifest.yaml for architecture diagram.
+> - **ddi.cloud.proxy.middleware/CLAUDE.md:** Interceptor code is performance-critical; profile before merging. Use gomock for gRPC mocks. Must regenerate pkg/pb/ when collector proto changes (`make protobuf`).
+
 ### Local Git Search
 
 For each involved repo, search for prior similar work:
@@ -124,8 +136,16 @@ For each repo, identify what changes:
 | **Tests** | Unit tests, integration tests, sqlmock fixtures |
 | **Idempotency** | Pre-flight duplicate check, rollback pattern |
 | **Docs / taxonomy** | Update `docs-manifest.yaml`, `taxonomy.yaml`, ADRs |
+| **Build / lint / test** | Use the Makefile targets from CLAUDE.md (`make fmt`, `make lint`, `make test`) — do NOT assume generic commands work |
 
 Per repo, classify each area as **likely**, **possible**, or **not-applicable** with a one-line reason.
+
+**Important:** Note the specific Makefile targets each repo requires. For example:
+- ddi.dns.config: `make fmt`, `make test`, `make lint`
+- ddi.msad.agent: `dotnet build`, `dotnet test` (or `make` equivalents if defined)
+- ddi.msad.collector: `make fmt`, `make test` (with nilaway checks in CI)
+
+These are discovered from CLAUDE.md and Makefile; agents will run these exact commands during implementation.
 
 ## Step 5 — Cross-Repo Dependencies
 
