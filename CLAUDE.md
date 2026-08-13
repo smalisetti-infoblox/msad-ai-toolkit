@@ -14,6 +14,22 @@ The toolkit operates on these repos in the **Infoblox-CTO** org:
 | **ddi.msadconnect.proxy** | `https://github.com/Infoblox-CTO/ddi.msadconnect.proxy` |
 | **ddi.msad.agent** | `https://github.com/Infoblox-CTO/ddi.msad.agent` |
 
+## Default Branches Per Repo
+
+⚠️ **Important:** Not all repos use `main`. Check the actual default branch:
+
+| Repo | Default Branch |
+|---|---|
+| ddi.dns.config | `main` |
+| ddi.cloud.proxy.middleware | `master` |
+| ddi.msad.collector | `main` |
+| ddi.msadconnect.proxy | `master` |
+| ddi.msad.agent | `main` |
+
+**Agents discover the default branch dynamically** — they do NOT assume `main`.
+
+---
+
 ## Fork-Based Contribution Workflow
 
 ### 1. Setup (One-Time)
@@ -33,6 +49,10 @@ git remote add origin https://github.com/YOUR-USERNAME/ddi.dns.config.git
 git remote -v
 # origin   https://github.com/YOUR-USERNAME/ddi.dns.config.git (fetch/push)
 # upstream https://github.com/Infoblox-CTO/ddi.dns.config.git (fetch)
+
+# Discover the default branch (important!)
+git symbolic-ref refs/remotes/upstream/HEAD
+# refs/remotes/upstream/main  (or "master", etc.)
 ```
 
 ### 2. Working on Features
@@ -40,27 +60,31 @@ git remote -v
 When the toolkit agents work on tasks:
 
 ```bash
-# Agents fetch from upstream (Infoblox-CTO)
-git fetch upstream main
+# Agents discover the default branch
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/upstream/HEAD | sed 's|refs/remotes/upstream/||')
 
-# Agents create a branch from upstream/main
-git checkout -b DDIDNS-10562-feature upstream/main
+# Agents fetch from upstream (Infoblox-CTO)
+git fetch upstream $DEFAULT_BRANCH
+
+# Agents create a branch from upstream/<default-branch>
+git checkout -b DDIDNS-10562-feature upstream/$DEFAULT_BRANCH
 
 # Agents commit and push to YOUR FORK (origin)
 git push origin DDIDNS-10562-feature
 
-# Open PR against Infoblox-CTO/main
+# Open PR against Infoblox-CTO/<default-branch>
 gh pr create --repo Infoblox-CTO/ddi.dns.config \
-  --base main \
+  --base $DEFAULT_BRANCH \
   --head YOUR-USERNAME:DDIDNS-10562-feature
 ```
 
 ### 3. Integration with Agents
 
 Agents in this toolkit:
+- **Discover** the default branch per repo (not hardcoded to `main`)
 - **Always fetch** from Infoblox-CTO (upstream)
 - **Always push** to your personal fork (origin)
-- **Always open PRs** against Infoblox-CTO/main
+- **Always open PRs** against Infoblox-CTO/<detected-default-branch>
 
 ### 4. Keeping Your Fork Synced
 

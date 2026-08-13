@@ -49,9 +49,10 @@ git clone https://github.com/Infoblox-CTO/msad-ai-toolkit.git ~/msad-ai-toolkit
 
 The toolkit will:
 1. Clone/fetch repos from Infoblox-CTO (upstream)
-2. Create branches and commit work
-3. Push to your fork (origin)
-4. Open PRs against Infoblox-CTO/main
+2. Discover each repo's actual default branch (varies by repo: `main` or `master`)
+3. Create branches and commit work
+4. Push to your fork (origin)
+5. Open PRs against Infoblox-CTO/<default-branch>
 
 ---
 
@@ -62,11 +63,16 @@ The toolkit will:
 ```bash
 cd ~/REPO-NAME
 
-# Fetch from canonical org
-git fetch upstream main
+# IMPORTANT: Discover the default branch (varies by repo!)
+# Some repos use "main", others use "master"
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/upstream/HEAD | sed 's|refs/remotes/upstream/||')
+echo "Default branch: $DEFAULT_BRANCH"
 
-# Create branch from upstream (not your fork's main)
-git checkout -b DDIDNS-XXXXX-description upstream/main
+# Fetch from canonical org
+git fetch upstream $DEFAULT_BRANCH
+
+# Create branch from upstream's default branch (not your fork's)
+git checkout -b DDIDNS-XXXXX-description upstream/$DEFAULT_BRANCH
 ```
 
 ### Making Changes
@@ -102,9 +108,12 @@ Co-Authored-By: Your Name <your.email@example.com>"
 # Push to YOUR fork (origin)
 git push origin DDIDNS-XXXXX-description
 
-# Open PR against Infoblox-CTO (upstream)
+# Determine the repo's default branch (if not already saved)
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/upstream/HEAD | sed 's|refs/remotes/upstream/||')
+
+# Open PR against Infoblox-CTO's default branch (not hardcoded to main)
 gh pr create --repo Infoblox-CTO/REPO-NAME \
-  --base main \
+  --base $DEFAULT_BRANCH \
   --head YOUR-USERNAME:DDIDNS-XXXXX-description
 ```
 
@@ -122,10 +131,11 @@ Implements a full Jira task across the five-repo ecosystem:
 
 **What it does:**
 - Reads the Jira task and spec from architecture-hub
+- Discovers each repo's actual default branch (varies by repo)
 - Creates branches from Infoblox-CTO (upstream)
 - Writes code using TDD (tests first)
 - Pushes to your fork (origin)
-- Opens PRs against Infoblox-CTO/main
+- Opens PRs against Infoblox-CTO/<detected-default-branch>
 - Never commits/pushes without your explicit approval
 
 ### msad-dev-epic
