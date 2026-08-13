@@ -216,6 +216,52 @@ For changes to `ddi.msad.agent`, acknowledge explicitly:
 
 > `ddi.msad.agent` tests will run on Windows CI (`windows_node_ddi_msad_agent_label` Jenkins node). Local verification is not possible on Mac. PR will be reviewed, then CI-verified before landing.
 
+## Step 5a: Git Commit Discipline
+
+Before opening a PR, commit changes in **strict order**: additions → modifications → deletions (separate commits per the plan).
+
+### Commit Order
+
+For each work package:
+
+1. **Additions commit(s):**
+   ```bash
+   git add <new files, new test cases>
+   git commit -m "Add <what>. New files: [list]. Purpose: [AC/reason]."
+   ```
+   Example: `Add replication-scope validator tests. New files: zones_test.go additions.`
+
+2. **Modifications commit(s):**
+   ```bash
+   git add <changed files>
+   git commit -m "Update/Fix <what>. Changed: [list]. Reason: [AC/reason]."
+   ```
+   Example: `Update zone validator to accept domain/forest scopes. Changed: stub_zone.go.`
+
+3. **Deletions commit(s)** (if any):
+   ```bash
+   git add <deletions>
+   git commit -m "Remove <what>. Deleted: [list]. Reason: [safe to remove]."
+   ```
+
+### Before Committing
+
+1. **Review diff:** `git diff --cached` (no unintended changes)
+2. **Check for secrets:** grep for credentials, tokens, API keys
+3. **Run tests:** `make test` (all pass)
+4. **Run lint:** `make fmt` && `make lint` (no errors)
+5. **Verify coverage:** report % (if below threshold, add tests)
+6. **Ask the user** before committing
+
+### NO Force-Push
+
+- **Never** use `git push --force` or `git push -f`
+- **Never** use `git reset --hard origin/main`
+- If you need to undo a commit after pushing, use `git revert` or create a new fixup commit
+- If push fails due to a hook, investigate and fix the issue (don't use `--no-verify`)
+
+---
+
 ## Step 6: PR Creation
 
 For each work package's repo, open a **draft PR** via `gh pr create --draft`:

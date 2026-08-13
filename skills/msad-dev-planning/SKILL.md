@@ -207,13 +207,38 @@ created: YYYY-MM-DD
 
 ## Per-Repo Work Packages
 
+### Git Commit Planning (Per-Package)
+
+For each work package, plan changes as a sequence of **additions**, **modifications**, and **deletions** (separate commits):
+
+**Additions** (new files, new functions, new tests):
+- Minimal commit: only new code, no changes to existing code
+- Example: "Add replication-scope validator tests (new test file)"
+
+**Modifications** (changes to existing code):
+- Separate from additions: only changes to existing files
+- Example: "Update zone validator to accept domain/forest scopes"
+
+**Deletions** (remove dead code):
+- Only delete if certain (unused, deprecated, or provably safe)
+- Example: "Remove legacy scope validator (no longer used)"
+
+This makes commits clean, reviewable, and bisectable. State in the plan file which changes are additions vs. modifications vs. deletions.
+
 ### Package 1: ddi.dns.config
 
 **Jira task:** DDIDNS-XXXXX
 
-**Changes:**
+**Changes (by type):**
+
+**Additions:**
+- New file: `pkg/service/application/stub_zone_test.go` additions (table-driven test cases for new scopes)
+
+**Modifications:**
 - `pkg/service/application/stub_zone.go` — update `validateStubZoneReplicationScopeNotLegacy()` to allow `domain`/`forest` (currently allows only `local`)
-- `*_test.go` — add test cases for new scopes
+
+**Deletions:**
+- (none — scope expansion, no removals)
 
 **Tests:**
 - Unit test: table-driven cases for allow-list boundaries
@@ -229,10 +254,17 @@ created: YYYY-MM-DD
 
 **Jira task:** DDIDNS-XXXXX
 
-**Changes:**
+**Changes (by type):**
+
+**Additions:**
+- New test cases in `pkg/msad_zone_helper_test.go` and `pkg/interceptor_handlers_test.go` (sqlmock, table-driven)
+
+**Modifications:**
 - `pkg/msad_zone_helper.go` — update `isValidMSADReplicationScopeForZoneCreate()` to match dns.config's allow-list
-- `pkg/interceptor_handlers.go` — update `AuthZoneCreateHandler.Handle` to enforce the new scope (or pass through if validation is already done)
-- `*_test.go` — sqlmock test cases for create with domain/forest scope
+- `pkg/interceptor_handlers.go` — update `AuthZoneCreateHandler.Handle` to enforce the new scope
+
+**Deletions:**
+- (none)
 
 **Tests:**
 - Unit test: scope validation with sqlmock
@@ -247,9 +279,17 @@ created: YYYY-MM-DD
 
 **Jira task:** DDIDNS-10521
 
-**Changes:**
-- `MSADAgent/Agent/Core/DnsInfoControllers/DnsPrimaryZoneController.cs` — add `ValidateReplicationScope()` method that checks for `local`/`domain`/`forest` before using in PowerShell `-ReplicationScope` argument
-- `MSADAgent/Agent.Tests` — xUnit test cases for scope validation
+**Changes (by type):**
+
+**Additions:**
+- New method: `ValidateReplicationScope()` in `DnsPrimaryZoneController.cs`
+- New test class in `MSADAgent/Agent.Tests` (xUnit) with validation test cases
+
+**Modifications:**
+- `DnsPrimaryZoneController.cs` — call `ValidateReplicationScope()` before using scope in PowerShell `-ReplicationScope` argument
+
+**Deletions:**
+- (none)
 
 **Tests:**
 - Unit test: scope validation (allow-list: local/domain/forest, reject legacy)

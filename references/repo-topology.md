@@ -355,6 +355,25 @@ CLAUDE.md contains:
 
 ---
 
+## Git Commit Discipline
+
+See **[git-commit-discipline.md](git-commit-discipline.md)** for detailed guidance on:
+- Separating additions, modifications, deletions into separate commits
+- Commit message format and structure
+- No force-push policy
+- Workflow examples (bad and good)
+
+Quick summary:
+- **Additions only** — new files, new tests (no changes to existing code)
+- **Modifications only** — changes to existing code (no new files, no deletions)
+- **Deletions only** — remove dead code (proven safe by grep)
+- Each type gets its own commit
+- Commit messages reference Jira ticket and explain why
+- Never force-push; use `git revert` to undo mistakes
+- Tests pass, coverage ≥ threshold before committing
+
+---
+
 ## Cross-Repo Contracts to Watch
 
 1. **Collector proto → Middleware client:** any change to `ddi.msad.collector/api/protobuf-spec/service.proto` must trigger `make protobuf` in the middleware to regenerate `pkg/pb/`.

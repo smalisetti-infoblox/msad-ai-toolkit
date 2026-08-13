@@ -344,12 +344,83 @@ Every hunk of code must map to an acceptance criterion in the Jira task. After i
 
 ---
 
+## Git Commit Discipline
+
+### Commit Structure: Separate Additions, Deletions, Modifications
+
+Plan and commit in this order. **Do not mix** addition, deletion, and modification in a single commit:
+
+1. **Additions only** — new files, new functions, new tests (no changes to existing code)
+   - Commit message: "Add [what]. New files: [list]. Purpose: [why, from AC]."
+   - Example: "Add replication-scope validator tests. New files: zones_test.go additions. Tests cover local/domain/forest scopes per DDIDNS-10519."
+
+2. **Modifications** — changes to existing code (logic, refactoring, bug fixes)
+   - Commit message: "Update/Fix [what]. Changed files: [list]. Reason: [AC or bug fix]."
+   - Example: "Update zone validator to accept domain/forest scopes. Changed: pkg/service/application/stub_zone.go. Satisfies DDIDNS-10519 AC1."
+
+3. **Deletions only** — remove dead code, unused imports, deprecated functions
+   - Commit message: "Remove [what]. Deleted files/lines: [list]. Reason: [why safe to delete]."
+   - Example: "Remove legacy replication-scope validator. Deleted: pkg/legacy_scope.go. No longer used (validated in DDIDNS-10562 refactor)."
+
+**Rationale:** Separate commits are easier to review, easier to bisect if issues arise, and clearer in blame history.
+
+### Commit Message Format
+
+```
+<Subject line (imperative, ≤70 chars)>
+
+<Body (wrap at 72 chars, optional but recommended)>
+- <Detail 1: what changed>
+- <Detail 2: why (AC, bug, refactor reason)>
+- <Detail 3: any caveats or deferred work>
+
+Jira: DDIDNS-XXXXX
+Closes: [if applicable]
+```
+
+**Example:**
+```
+Add replication-scope validation to middleware zone-create handler
+
+- New file: pkg/msad_zone_helper_test.go with table-driven tests
+- New function: isValidMSADReplicationScopeForZoneCreate(scope string) bool
+- Validates scope ∈ {local, domain, forest}; rejects legacy
+- Satisfies DDIDNS-10519 AC1 and DDIDNS-10562 AC2
+
+Jira: DDIDNS-10519
+```
+
+### No Force-Push
+
+- **Never force-push** (`git push --force`, `git push -f`, `git reset --hard origin/main`).
+- If you need to undo a commit, use `git revert` or create a new fixup commit.
+- If you made a mistake and haven't pushed yet, `git reset --soft HEAD~1` to undo locally, then re-commit (don't amend).
+- **If the repo has a push hook that fails,** investigate and fix the issue before pushing — don't bypass with `--no-verify`.
+
+### Before Committing
+
+1. **Review staged changes:** `git diff --cached`
+2. **Check for secrets:** grep staged files for credentials, tokens, API keys
+3. **Run final tests:** `make test` (all tests pass)
+4. **Run final lint:** `make fmt` + `make lint` (all checks pass)
+5. **Verify coverage:** if below threshold, add more tests
+6. **Ask the user** before committing (don't auto-commit)
+
+---
+
 ## Implementation Log
 
 Maintain a running log (append to the conversation):
 
 ```
-Step <N>/M done — <one-line change>. Files: <list>. Tests: <pass/fail>.
+Step <N>/M done — <one-line change>. Files: <list>. Tests: <pass/fail>. Staged for commit.
 ```
 
 This helps the user (and a review agent) trace what you did without reading the full diff.
+
+Example:
+```
+Step 1 done — Add zone validator tests. Files: pkg/service/application/stub_zone_test.go. Tests: PASS. Staged (addition).
+Step 2 done — Update zone validator logic. Files: pkg/service/application/stub_zone.go. Tests: PASS. Staged (modification).
+Step 3 done — All checks pass. Ready to commit on your approval.
+```
