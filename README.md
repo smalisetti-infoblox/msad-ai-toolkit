@@ -2,6 +2,10 @@
 
 Claude Code custom agent + skills for the MSAD (Microsoft Active Directory DNS) ecosystem. Implements multi-repo orchestration for **DDIDNS-7732** (Microsoft DNS zone creation / replication scope) and related features across five repositories with different stacks.
 
+**Quick Start:** See [Getting Started](#getting-started) for your first task, or jump to [Usage Patterns](#usage-patterns) for worked examples.
+
+---
+
 ## Five-Repo Ecosystem
 
 | Repo | Stack | Role |
@@ -14,190 +18,366 @@ Claude Code custom agent + skills for the MSAD (Microsoft Active Directory DNS) 
 
 ---
 
-## What's In This Toolkit
+## Installation
 
-### Agents (2)
+### Option 1: Add as Claude Code Plugin (Recommended)
 
-- **`msad-backend-dev`** — implementation agent for a single Jira task in a single repo
-  - TDD discipline (write test first)
-  - Cross-repo contract awareness (proto sync, validator mirrors)
-  - PowerShell/LDAP safety checks
-  - Per-repo test/build commands (dotnet vs. go)
+```bash
+# Clone the repo
+git clone <this-repo> ~/msad-ai-toolkit
 
-- **`msad-code-review`** — review agent for a single PR
-  - MSAD-specific checklist (replication-scope allow-list, idempotency/rollback, error-code mapping, PowerShell safety)
-  - General code quality (SOLID, correctness, security, test coverage)
-  - Severity levels (MUST/SHOULD/MAY)
+# In Claude Code: Settings → Plugins → Add Local Plugin
+# Path: ~/msad-ai-toolkit
+```
 
-### Skills (4)
+### Option 2: Symlink into ~/.claude/
 
-- **`msad-developer`** — entry-point router
-  - Classifies input (epic / story / task / "execute plan")
-  - Suggests downstream skill (planning or execution)
-  - Never auto-chains; user owns the decision
+```bash
+# Install agents
+ln -s ~/msad-ai-toolkit/agents/* ~/.claude/agents/
 
-- **`msad-dev-planning`** — plan generator for an epic/story/task
-  - Reads Jira ticket + linked context
-  - Groups work into per-repo packages
-  - Identifies cross-repo dependencies (proto sync, validator mirrors)
-  - Writes a plan file; hard-gates on user approval
+# Install skills
+ln -s ~/msad-ai-toolkit/skills/* ~/.claude/skills/
 
-- **`msad-dev-execution`** — plan executor
-  - Dispatches `msad-backend-dev` agents (parallel for independent packages)
-  - Runs test suite per repo
-  - **Validation loop** (bounded, ≤ 3 rounds): review → fix findings → re-review → clean/converged
-  - Opens draft PRs cross-linked by dependency
-
-- **`msad-e2e-verify`** — API-level end-to-end verification
-  - Brings up dns.config service + mocked MSAD collector
-  - Drives zone create/update flows via WAPI v3
-  - Verifies replication-scope handling, error-code mapping, DB persistence
-  - **Does not require Windows agent** (only for PowerShell cmdlet execution, deferred to Windows CI)
-
-### Reference Materials
-
-- **`references/repo-topology.md`** — shared knowledge loaded by agents/skills
-  - Stack, build/test/lint commands per repo
-  - Request flow chain + validation points
-  - Proto/generated-code pairs (what to regenerate when)
-  - Build/test patterns (table-driven Go tests, sqlmock, xUnit)
+# Reload Claude Code
+```
 
 ---
 
-## Installation
-
-Clone this repo (or add as a Claude Code plugin):
-
-```bash
-# Option 1: Clone + load locally
-git clone <this-repo> ~/msad-ai-toolkit
-# Then in Claude Code: add plugin path (settings → plugins → local)
-
-# Option 2: Symlink into ~/.claude/
-ln -s ~/msad-ai-toolkit/agents/* ~/.claude/agents/
-ln -s ~/msad-ai-toolkit/skills/* ~/.claude/skills/
-# Then in Claude Code: reload settings
-```
-
 ## Getting Started
 
-### For a Jira Epic/Story
+### Step 1: Understand Your Task
+
+You have a Jira task (epic, story, or task ID). Examples:
+
+- **Epic:** DDIDNS-7732 ("Microsoft DNS zone creation / replication scope")
+- **Story:** DDIDNS-10562 ("Backend: support Domain/Forest replication scope on Microsoft DNS zone creation")
+- **Task:** DDIDNS-10519 ("ddi.cloud.proxy.middleware: support Domain/Forest replication scope for Auth/Reverse Auth/Forward zone creation")
+
+### Step 2: Invoke the Router
+
+Start by invoking the **router skill**, which classifies your task and suggests the right next step:
+
+```
+User: work on DDIDNS-7732
+```
+
+The router will ask questions to understand scope, then suggest:
+
+- **For epics:** `/msad-dev-planning DDIDNS-7732` (plan the epic)
+- **For stories/tasks:** `/msad-dev-planning DDIDNS-10562` (plan the story/task)
+- **For "execute plan X":** `/msad-dev-execution /path/to/plan.md` (run a pre-approved plan)
+
+### Step 3: Run Planning
+
+Follow the router's suggestion and invoke the planning skill:
+
+```
+User: /msad-dev-planning DDIDNS-7732
+```
+
+**What the planning skill does:**
+
+1. Reads the Jira ticket (epic + linked stories/tasks)
+2. Groups work by repo (ddi.dns.config, middleware, collector, etc.)
+3. Identifies cross-repo dependencies (proto sync, validator mirrors, error codes)
+4. Calls a fresh-context reviewer agent to audit the plan
+5. Surfaces the plan + reviewer's findings for your approval
+
+**You review:**
+
+- Does each work package make sense?
+- Are cross-repo dependencies clear?
+- Are acceptance criteria mapped?
+- Do you agree with the scope?
+
+**You respond:**
+
+- **"Approve"** → planning stamps the plan as approved
+- **"Approve with edits"** → you provide feedback, planning revises
+- **"Reject"** → planning goes back to clarifying questions
+
+### Step 4: Run Execution
+
+Once the plan is approved, invoke the execution skill:
+
+```
+User: /msad-dev-execution /path/to/plan.md
+```
+
+**What the execution skill does:**
+
+1. For each work package in the plan:
+   - Dispatches an implementation agent (`msad-backend-dev`) to write code TDD-style
+   - Runs the repo's test suite (go test / dotnet test)
+   - **Validation loop** (≤3 rounds):
+     - Code review agent reviews the branch
+     - You see findings (MUST fix, SHOULD fix, MAY fix)
+     - You fix or justify findings
+     - Code review agent re-reviews until clean
+   - Opens a **draft PR** cross-linked with dependencies
+
+2. Returns to you with all draft PR URLs.
+
+---
+
+## Usage Patterns
+
+### Pattern 1: Epic Work (Multi-Repo)
+
+**Input:** A large epic like DDIDNS-7732 touching all five repos.
+
+**Flow:**
 
 ```
 User: work on DDIDNS-7732
 
-Claude Code: suggests /msad-dev-planning DDIDNS-7732
+Router: suggests /msad-dev-planning DDIDNS-7732
 
 User: /msad-dev-planning DDIDNS-7732
+[Planning reads epic, finds 20+ linked tasks, groups into 5 work packages (one per repo)]
 
-[Planning skill reads the epic, groups tasks by repo, writes plan, asks for approval]
+Planning: Here's your plan:
+  - Package 1: ddi.dns.config (2 tasks)
+  - Package 2: ddi.cloud.proxy.middleware (3 tasks)
+  - Package 3: ddi.msad.collector (2 tasks)
+  - Package 4: ddi.msad.agent (1 task)
+  
+  Cross-repo dependencies:
+  - Collector proto changes → middleware must regenerate
+  - Validator sync: dns.config + middleware must mirror
+  
+  Plan approved? (Y/N/Edit)
 
-User: (approves plan)
+User: Approve
 
 User: /msad-dev-execution /path/to/plan.md
+[Execution dispatches 4 agents in parallel (independent packages)]
 
-[Execution skill dispatches implementation agents, runs tests, validates with code review loop, opens draft PRs]
+[Agents return with code + test results]
+
+[Code review loop runs; findings are fixed]
+
+[Draft PRs opened, cross-linked]
+
+Execution: All done. Draft PRs:
+  - https://github.com/Infoblox-CTO/ddi.dns.config/pull/123
+  - https://github.com/Infoblox-CTO/ddi.cloud.proxy.middleware/pull/456
+  - ... etc ...
 ```
 
-### For a Single Task
+### Pattern 2: Single-Task Work (One Repo)
+
+**Input:** A task scoped to one repo, like DDIDNS-10519.
+
+**Flow:**
 
 ```
-User: implement DDIDNS-10521
+User: work on DDIDNS-10519
 
-Claude Code: suggests /msad-dev-planning DDIDNS-10521
+Router: suggests /msad-dev-planning DDIDNS-10519
 
-[Same flow, but scoped to one task]
+User: /msad-dev-planning DDIDNS-10519
+[Planning reads task, finds it's in ddi.cloud.proxy.middleware, writes a 1-package plan]
+
+Planning: Plan for DDIDNS-10519:
+  - Single package: ddi.cloud.proxy.middleware
+  - Changes: update isValidMSADReplicationScopeForZoneCreate to allow domain/forest
+  - Tests: unit tests + sqlmock integration test
+  - No cross-repo dependencies
+  
+  Ready? (Y/N/Edit)
+
+User: Approve
+
+User: /msad-dev-execution /path/to/plan.md
+[Execution dispatches 1 agent]
+
+[Agent writes test first, then implementation]
+
+[Code review runs; findings fixed]
+
+[Draft PR opened]
+
+Execution: Done. Draft PR:
+  - https://github.com/Infoblox-CTO/ddi.cloud.proxy.middleware/pull/456
 ```
 
-### For E2E Testing (API Layer)
+### Pattern 3: API-Level E2E Testing
+
+**Input:** You want to test zone creation flows without the Windows agent.
+
+**Flow:**
 
 ```
-User: test the replication scope flow via API
+User: I want to test zone replication scope changes via the API, but I can't run the Windows agent locally
 
-Claude Code: suggests /msad-e2e-verify
+Router: suggests /msad-e2e-verify
 
-[E2E skill brings up the stack, runs zone create/update test sequences, verifies DB state and error handling]
+User: /msad-e2e-verify
+[E2E skill brings up dns.config service + mocked collector]
+[Runs zone create/update test sequences]
+[Verifies scope values in DB, error handling]
+
+E2E: Tests passed:
+  - ✓ Create zone with local scope
+  - ✓ Create zone with domain scope
+  - ✓ Create zone with forest scope
+  - ✓ Reject invalid scope (legacy)
+  - ✓ Update zone scope (forward only)
+  - ✓ Error code mapping (ZONE-001 → AlreadyExists)
 ```
+
+### Pattern 4: Reviewing Someone Else's PR
+
+**Input:** A teammate opened a PR in one of the MSAD repos; you want a second opinion.
+
+**Flow:**
+
+```
+User: review https://github.com/Infoblox-CTO/ddi.cloud.proxy.middleware/pull/456
+
+[Note: You would invoke the code-review agent directly here, not the router]
+
+Code Review: MSAD-Specific Findings:
+  [✓] Replication-scope allow-list consistent (local/domain/forest, no legacy)
+  [✓] Idempotency checks present (duplicate pre-flight, rollback on failure)
+  [!] Error-code mapping missing (new ZONE-005 not in ErrorCodeToStatus)
+  [!] Validator not mirrored in dns.config
+  
+  Verdict: SHOULD FIX before merge (2 issues)
+```
+
+---
+
+## Artifact Guide
+
+### Agents
+
+See [agents/README.md](agents/README.md) for details on:
+
+- **`msad-backend-dev`** — writes code (TDD-first, cross-repo aware, PowerShell-safe)
+- **`msad-code-review`** — reviews code (MSAD checklist, severity levels)
+
+**You typically don't invoke these directly.** Planning and execution dispatch them.
+
+### Skills
+
+See [skills/README.md](skills/README.md) for details on:
+
+- **`msad-developer`** — router (epic → planning, task → planning, plan → execution)
+- **`msad-dev-planning`** — plan generator (reads Jira, groups by repo, identifies dependencies, gated approval)
+- **`msad-dev-execution`** — plan executor (implement → test → validate loop → draft PR)
+- **`msad-e2e-verify`** — API-level E2E (no Windows agent needed)
+
+**Typical entry point:** `/msad-developer <task>`
+
+### References
+
+- **[references/repo-topology.md](references/repo-topology.md)** — Shared knowledge (stacks, commands, validators, proto pairs, test patterns)
+- **[references/plan-reviewer-prompt.md](references/plan-reviewer-prompt.md)** — Template for the auto-reviewer agent (loaded by planning skill)
+
+---
+
+## FAQ
+
+### Q: Can I test ddi.msad.agent locally on Mac?
+
+**A:** No. It's a Windows Service with PowerShell cmdlets; the agent cannot run on Mac/Linux. **Local verification:** unit tests (xUnit in the agent repo). **Real verification:** Windows CI (Jenkins `windows_node_ddi_msad_agent_label` node).
+
+The toolkit acknowledges this and points to the right verification gate.
+
+### Q: What if my task spans multiple repos?
+
+**A:** The router will detect it. Planning will group the work into per-repo packages, identify dependencies (e.g., "collector proto change must land before middleware PR"), and write a plan with ordering. Execution respects that ordering: it runs independent packages in parallel, but holds dependent packages until their dependency is done.
+
+### Q: What's the "validation loop" in execution?
+
+**A:** Implementation → code review → findings reported → you fix or justify → code review runs again (up to 3 rounds) → if clean, draft PR opens. This prevents landing code with review findings still open.
+
+### Q: Can I skip planning and go straight to implementation?
+
+**A:** Technically yes (user could invoke agents directly), but **don't**. Planning is the gate that:
+- Catches scope creep
+- Surfaces cross-repo dependencies
+- Runs a fresh-context reviewer to catch gaps
+- Gathers the whole team's consent upfront
+
+Skipping planning is a quality regression.
+
+### Q: How do I know if a change is done?
+
+**A:** You get a **draft PR** (not merged yet). The PR:
+- Links to the Jira task
+- Lists files changed
+- References cross-repo dependencies
+- Notes any deferred work (e.g., Windows testing, stage testing)
+- Is ready for review by a human (your team)
+
+You can iterate on the draft PR, or request a human review, or merge if it looks good.
 
 ---
 
 ## Key Design Decisions
 
-### Multi-Round Validation Before PR
+### 1. Multi-Round Code Review Before PR
 
-Implementation → **review loop** (bounded, ≤ 3 rounds) → fix findings → **re-review until clean** → then draft PR.
+Code doesn't land in a draft PR until review findings are clean (or explicitly justified). This is **non-negotiable** in the execution skill.
 
-This prevents landing half-baked code with review findings still open. Matches the DNS-team `dns-dev-execution` pattern.
+### 2. Honest About Windows Testing
 
-### Windows Testing Reality
+If your task involves `ddi.msad.agent`, the toolkit says:
+- "Local testing impossible"
+- "Windows CI will verify"
+- "Stage testing will verify AD replication"
 
-`ddi.msad.agent` is a Windows Service and **cannot be tested on Mac/Linux**. This toolkit acknowledges that:
+No false claims of "fully tested on Mac."
 
-- **Local tests** can cover (go test, table-driven tests in Go repos, xUnit in agent)
-- **API-level E2E** can cover (zone create/update with mocked collector, scope validation, error mapping)
-- **Windows CI** must cover (real PowerShell cmdlets, Windows-only DLLs, Jenkins `windows_node_ddi_msad_agent_label` node)
-- **Stage testing** must cover (real MSAD, AD replication, permission errors)
+### 3. Cross-Repo Contract Discipline
 
-Skills explicitly flag what's deferred and point to the right verification gate.
+Four replication-scope validators must stay in sync across repos. Planning surfaces this upfront. Code review enforces it.
 
-### Cross-Repo Contract Discipline
+### 4. Plan Auto-Review
 
-Four validators must stay in sync:
+Before you approve a plan, a fresh-context reviewer agent audits it for:
+- Scope clarity
+- Dependency gaps
+- Assumption honesty
+- Risk realism
 
-- `validateStubZoneReplicationScopeNotLegacy()` in dns.config
-- `isValidMSADReplicationScopeForZoneCreate()` in middleware
-- `isValidMSADReplicationScopeForStubZone()` in middleware
-- `isADRestrictedScope()` in dns.config
-
-Code review checklist enforces this. Planning surfaces it upfront.
+Reviewer is advisory; you decide on findings.
 
 ---
 
 ## PR Quality Bar
 
-PRs from this toolkit follow the pattern set by the existing DDIDNS-7732 work:
+PRs from this toolkit follow the pattern set by existing DDIDNS-7732 work:
 
 - ✅ Precise Jira/AC cross-references
 - ✅ "Intentionally unchanged" call-outs for unrelated code
-- ✅ Cross-repo dependencies documented (proto sync, validator sync)
-- ✅ Follow-up tickets filed for out-of-scope gaps
-- ✅ Test coverage at all layers (unit, integration, e2e where applicable)
-- ✅ Windows CI verification acknowledged (if agent changes)
-
----
-
-## Repo Map (from `references/repo-topology.md`)
-
-See `references/repo-topology.md` for:
-- Exact build/test commands per repo (`make test` for Go, `dotnet test` for agent)
-- Proto files + regeneration points
-- Test patterns (table-driven, sqlmock, xUnit, gomock)
-- Replication-scope validator locations
-- Error-code mapping in the collector
-
----
-
-## Contributing & Future Work
-
-This toolkit is a **v0.1.0 scaffold** with real, repo-specific content. As the team uses it:
-
-- **Feedback on planning/execution flow?** File an issue or reach out to the MSAD team.
-- **New patterns discovered?** Update the agents/skills to capture them.
-- **Ready to merge into `ib.ai-hub`?** This can become a new `playbooks/uddi/msad` entry in the org-wide plugin marketplace.
-
----
-
-## Contact
-
-For questions, feedback, or to join MSAD development work: [MSAD team contact info]
+- ✅ Cross-repo dependencies documented
+- ✅ Follow-up tickets filed for deferred work
+- ✅ Test coverage (unit, integration, e2e where applicable)
+- ✅ Windows CI verification acknowledged
 
 ---
 
 ## See Also
 
-- **[DDIDNS-7732 Epic](https://infoblox.atlassian.net/browse/DDIDNS-7732)** — Microsoft DNS zone creation / replication scope
-- **[architecture-hub](https://github.com/Infoblox-CTO/architecture-hub)** — specs, design docs, contracts for this epic
-- **[ddi.dns.config](https://github.com/Infoblox-CTO/ddi.dns.config)** — WAPI v3 surface
-- **[ddi.cloud.proxy.middleware](https://github.com/Infoblox-CTO/ddi.cloud.proxy.middleware)** — gRPC interceptor library
-- **[ddi.msad.collector](https://github.com/Infoblox-CTO/ddi.msad.collector)** — gRPC microservice
-- **[ddi.msad.agent](https://github.com/Infoblox-CTO/ddi.msad.agent)** — Windows Service (C#/.NET)
+- **[agents/README.md](agents/README.md)** — Agent details
+- **[skills/README.md](skills/README.md)** — Skill details
+- **[references/repo-topology.md](references/repo-topology.md)** — Repo reference (stacks, commands, validators)
+- **[DDIDNS-7732 Epic](https://infoblox.atlassian.net/browse/DDIDNS-7732)** — The Microsoft DNS zone creation epic
+- **[architecture-hub](https://github.com/Infoblox-CTO/architecture-hub)** — Specs and contracts
+
+---
+
+## Next Steps
+
+1. **Install the toolkit** (add as plugin or symlink)
+2. **Pick a task** (Jira epic or story)
+3. **Invoke the router:** `/msad-developer <task-id>`
+4. **Follow the flow:** plan → approve → execute
+5. **Review draft PR** when done
+
+Questions? Ask the MSAD team or file an issue in this repo.
