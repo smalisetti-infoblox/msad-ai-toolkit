@@ -100,7 +100,7 @@ ln -s ~/msad-ai-toolkit/skills/* ~/.claude/skills/
 You have a rough idea. **First, structure the epic:**
 
 ```bash
-/msad-dev-plan-epic DDIDNS-7732
+/msad-plan-epic DDIDNS-7732
 ```
 
 **What happens:**
@@ -186,7 +186,7 @@ If you want explicit approval gates or detailed analysis before execution:
 ## Architecture: Four-Tier Automation
 
 ```
-Tier 0: /msad-dev-plan-epic (5 min) ← START HERE for new epic
+Tier 0: /msad-plan-epic (5 min) ← START HERE for new epic
   ↓ Structure epic into Backend/Frontend/QA stories
   
 Tier 1: /msad-dev-planning (10 min) ← for detailed approval gates
@@ -206,7 +206,7 @@ Manual: /msad-backend-dev (10-30 min)
 ```
 
 **Typical flow:**
-1. Start with `/msad-dev-plan-epic` (structure the epic once)
+1. Start with `/msad-plan-epic` (structure the epic once)
 2. Then use `/msad-dev-epic` or `/msad-dev-story` (execute repeatedly as stories change)
 
 ---
@@ -740,7 +740,7 @@ PRs from this toolkit follow the pattern set by existing DDIDNS-7732 work:
 
 ### "My epic has no stories/tasks yet. What do I do?"
 
-Use `/msad-dev-plan-epic EPIC-ID` to analyze the epic and generate a recommended structure. It creates Backend/Frontend/QA stories with repo-scoped tasks automatically.
+Use `/msad-plan-epic EPIC-ID` to analyze the epic and generate a recommended structure. It creates Backend/Frontend/QA stories with repo-scoped tasks automatically.
 
 ### "Can I run this on an epic with mixed Backend/Frontend tasks?"
 
@@ -759,7 +759,7 @@ The failing agent will stop and report the issue. You have three options:
 
 ### "Do I need to structure the epic in a specific way?"
 
-Yes, for optimal toolkit performance. **See [Suggested Jira Structure](#suggested-jira-structure-for-toolkit-optimization)** for the recommended Epic → Story → Task hierarchy. Or use `/msad-dev-plan-epic` to generate it.
+Yes, for optimal toolkit performance. **See [Suggested Jira Structure](#suggested-jira-structure-for-toolkit-optimization)** for the recommended Epic → Story → Task hierarchy. Or use `/msad-plan-epic` to generate it.
 
 ### "What repos should I expect PRs in?"
 
@@ -790,7 +790,7 @@ No hard limits, but practical guidance:
 
 **Skill & Agent Details:**
 - **[skills/README.md](skills/README.md)** — All 7 skills + dependency chain
-  - `/msad-dev-plan-epic` — Structure epics (NEW)
+  - `/msad-plan-epic` — Structure epics (NEW)
   - `/msad-dev-epic` — Execute epic (updated)
   - `/msad-dev-story` — Execute story (NEW)
   - `/msad-dev-planning` — Detailed plan
@@ -820,7 +820,7 @@ No hard limits, but practical guidance:
 2. **Have a Jira epic** (e.g., DDIDNS-7732)
 3. **Three commands:**
    ```bash
-   /msad-dev-plan-epic DDIDNS-7732    # (5 min) Structure the epic
+   /msad-plan-epic DDIDNS-7732    # (5 min) Structure the epic
    /msad-dev-epic DDIDNS-7732        # (20 min) Execute all Backend stories in parallel
    ```
 4. **Review draft PRs** when notified (parallel to Frontend team's work)
