@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "msad-ai-toolkit",
+  "description": "Claude Code custom agent + skills for the MSAD (Microsoft Active Directory DNS) ecosystem.",
+  "owner": {
+    "name": "Infoblox MSAD Team"
+  },
+  "plugins": [
+    {
+      "name": "msad-ai-toolkit",
+      "source": ".",
+      "description": "Multi-repo orchestration for DDIDNS-7732: msad-backend-dev/msad-code-review agents, plus msad-developer/msad-dev-planning/msad-dev-execution/msad-e2e-verify skills.",
+      "version": "0.1.0"
+    }
+  ]
+}
