@@ -7,11 +7,11 @@
 #      (This is the exact drift that motivated this hook: cloud.discovery
 #      and cq-source-msad were added to repo-topology.md but README.md's
 #      Six-Repo Ecosystem section was never updated to match.)
-#   2. Doc-touch reminder — if a commit changes "inner detail" files
+#   2. Doc-touch requirement — if a commit changes "inner detail" files
 #      (skills/, agents/, references/, CLAUDE.md) without touching any
-#      doc file (README.md, CONTRIBUTING.md, or a skill/agent's own
-#      README.md), block and require either a doc update or an explicit
-#      opt-out via SKIP_DOC_CHECK=1.
+#      doc file (README.md, CONTRIBUTING.md, HANDOFF.md, or a skill/agent
+#      README.md), block the commit and require either a doc update or
+#      an explicit opt-out via SKIP_DOC_CHECK=1.
 #
 # Install (one-time, per clone):
 #   git config core.hooksPath .githooks
@@ -59,6 +59,7 @@ if echo "$STAGED_FILES" | grep -qE '^references/repo-topology\.md$|^README\.md$'
     echo
     echo "Fix: add the missing repo to the other file (or remove it from CANONICAL_REPOS"
     echo "in .githooks/pre-commit if it's genuinely no longer part of the MSAD ecosystem)."
+    echo "This check has no escape hatch — it's a mechanical fact, not a judgment call."
     echo
   fi
 fi
