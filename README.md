@@ -7,7 +7,7 @@
 **Key Features:**
 - 🎯 **Epic Planner** — Structure epics into Backend/Frontend/QA stories with repo-scoped tasks
 - 🚀 **Parallel Orchestration** — Execute Backend work in parallel; auto-exclude Frontend/UI tasks (separate team)
-- 📖 **Story-Level Execution** — Run single stories faster (10-15 min) when needed
+- 📖 **Story-Scoped Execution** — Target one story instead of a full epic when you want a faster, narrower run
 - ✅ **Automatic Quality Gates** — Tests, coverage ≥80%, linting all verified before PR
 - 🔄 **Cross-Repo Coordination** — Handles proto sync, validator mirrors, error-code mapping
 - 📝 **Jira Guidance** — Structured epic/story templates for optimal toolkit automation
@@ -17,8 +17,9 @@
 - Dev-plan review (≤3 rounds) before any implementation begins
 - Code-review loop (≤3 rounds) before PRs are opened
 - All using shared **bounded-review-loop pattern** with MUST/SHOULD/MAY triage and escalation on non-convergence
+- **Deduplication built in:** existing stories, plans, and PRs are discovered and improved, never blindly recreated
 
-**Quick Start:** See [Quick Start](#quick-start-recommended) for your first epic, or [Usage Patterns](#usage-patterns) for worked examples.
+**Quick Start:** See [Quick Start](#quick-start-recommended-fully-gated-pipeline) for your first epic, or [Usage Patterns](#usage-patterns) for worked examples.
 
 ---
 
@@ -26,13 +27,13 @@
 
 - [Six-Repo Ecosystem](#six-repo-ecosystem) — Core repos + dependencies
 - [Installation](#installation) — Setup options
-- [Quick Start](#quick-start-recommended) — Two-step workflow for new epics
-- [Other Epic Patterns](#other-epic-patterns) — Story-level execution, detailed planning
-- [Architecture](#architecture-four-tier-automation) — Four-tier automation model
+- [Quick Start](#quick-start-recommended-fully-gated-pipeline) — The fully gated pipeline for new epics
+- [Architecture](#architecture-fully-gated-pipeline) — Gate-by-gate pipeline diagram
 - [Suggested Jira Structure](#suggested-jira-structure-for-toolkit-optimization) — Best practices for epic organization
-- [Usage Patterns](#usage-patterns) — Worked examples (Quick Epic, Detailed Plan, PR Gaps)
-- [Troubleshooting & FAQ](#troubleshooting--faq)
-- [References](#references-documentation) — Links to detailed docs
+- [Usage Patterns](#usage-patterns) — Worked examples
+- [Skills & Agents Reference](#skills--agents-reference) — What each skill/agent does
+- [FAQ](#faq)
+- [References](#references--documentation) — Links to detailed docs
 
 ---
 
@@ -162,54 +163,6 @@ Your epic is structured and approved. **Run:**
 
 ---
 
-## Other Epic Patterns
-
-### Story-Level Execution (Faster Single-Story Focus)
-
-```bash
-/msad-dev-story DDIDNS-10562
-```
-
-Same discovery, classification, and dispatch as epic skill, but **scoped to one story** (fewer agents, typically 2–4 instead of 6–8). Excludes Frontend/UI tasks.
-
-**Timeline:** ~10–15 minutes
-
-**When to use:**
-- You want to complete a single story within an epic
-- Faster than full epic orchestration
-- Still gets Backend/Frontend filtering and consolidated reporting
-
-### Advanced: Detailed Planning + Execution
-
-If you want explicit approval gates or detailed analysis before execution:
-
-#### Step 1: Generate Detailed Plan
-
-```bash
-/msad-dev-planning DDIDNS-7732
-```
-
-**What happens:**
-- Reads epic + all linked tasks
-- Groups work by repo, identifies dependencies, **classifies Backend vs. Frontend/UI**
-- Runs fresh-context reviewer to catch gaps
-- Presents plan for your approval
-
-#### Step 2: Execute Approved Plan
-
-```bash
-/msad-dev-execution DDIDNS-7732
-```
-
-**What happens:**
-- Dispatches implementation agents per Backend work package
-- Runs tests (docker-compose, go test, dotnet test)
-- Validation loop (≤3 rounds): code review → findings → fixes
-- Opens draft PRs when all Backend gates pass
-- Reports excluded Frontend/UI tasks
-
----
-
 ## Architecture: Fully Gated Pipeline
 
 Every task requires an **approved, bounded-reviewed plan** before implementation. No code path skips planning.
@@ -319,7 +272,7 @@ DDIDNS-7732 (Epic: "Microsoft DNS Zone Creation")
 
 **What the toolkit does:**
 - `/msad-dev-epic DDIDNS-7732` orchestrates all Backend stories (skips Frontend stories, lists them as excluded)
-- `/msad-dev-story DDIDNS-10562` orchestrates a single Backend story (faster, fewer agents)
+- `/msad-dev-epic DDIDNS-10562 --scope story` orchestrates a single Backend story (faster, fewer tasks in flight)
 - Frontend stories are explicitly noted as "managed by separate team"
 
 ### Story Structure (Focused Deliverable)
@@ -356,8 +309,8 @@ Linked Tasks:
 4. **"Backend —" prefix.** Use this to signal the toolkit that the story is backend-only (not Portal UI). Frontend stories use `"Frontend —"` or `"Portal —"`.
 
 **What the toolkit does:**
-- `/msad-dev-story DDIDNS-10562` discovers all linked tasks, classifies Backend (skips any with UI keywords), finds existing PRs, and orchestrates 4 agents in parallel
-- Typical timeline: 10–15 minutes (all Backend work done, ready for review)
+- `/msad-dev-epic DDIDNS-10562 --scope story` discovers all linked tasks, classifies Backend (skips any with UI keywords), finds existing PRs, and loops each task through planning (if needed) + execution
+- Typical timeline: 10–15 minutes for a focused story (each task still requires an approved plan before implementation)
 
 ### Backend vs. Frontend Task Naming
 
@@ -392,7 +345,7 @@ DDIDNS-7732 (Epic: "Microsoft DNS Zone Creation with Replication Scope")
 │  ├─ Task: "ddi.msad.collector: map ZONE-005 error code"
 │  └─ Task: "ddi.dns.config: validate replication scope on create"
 │  
-│  [/msad-dev-story DDIDNS-10562 → orchestrates 4 agents → 15 min]
+│  [/msad-dev-epic DDIDNS-10562 --scope story → plan+execute 4 tasks → ~15 min]
 │
 ├─ Story 2: DDIDNS-10563 "Frontend — Portal UI for Scope Selection"
 │  │
@@ -423,434 +376,136 @@ Full Epic Flow:
 
 ## Usage Patterns
 
-### Pattern A: Quick Epic Execution (Recommended)
+### Pattern A: Full Epic, First Time
 
-**Input:** Epic like DDIDNS-7732 (zone creation / replication scope)
-
-**Flow:**
+**Input:** New epic like DDIDNS-7732 with no stories yet.
 
 ```bash
-User: /msad-dev-epic DDIDNS-7732
+/msad-plan-epic DDIDNS-7732
+#   → structure plan written, bounded review (≤2 rounds), user approval gate
 
-Epic Execution:
-  ✓ Discovery: Found 4 existing PRs, 3 tasks not-started
-  ✓ Classification: 2 partial PRs (gaps), 2 complete PRs
-  ✓ Dispatch: 4 agents launched in parallel
-  ✓ Agent 1: PR 507 (complete gap) → Coverage 87% → 92.3% ✓
-  ✓ Agent 2: PR 508 (review) → Tests passing ✓
-  ✓ Agent 3: PR 241 (complete gap) → Coverage 85% → 92.1% ✓
-  ✓ Agent 4: PR 6300 (review) → Tests passing ✓
+/msad-plan-epic DDIDNS-7732 --create
+#   → creates Backend/Frontend/QA stories + tasks in Jira (refuses duplicates)
 
-Result: All 4 PRs ready for human review
-Timeline: ~20 minutes (parallel execution)
-
-PRs ready to review/merge:
-  - https://github.com/Infoblox-CTO/ddi.cloud.proxy.middleware/pull/507
-  - https://github.com/Infoblox-CTO/ddi.cloud.proxy.middleware/pull/508
-  - https://github.com/Infoblox-CTO/ddi.msad.collector/pull/241
-  - https://github.com/Infoblox-CTO/ddi.dns.config/pull/6300
+/msad-dev-epic DDIDNS-10562
+#   → for each Backend task in the story:
+#       - approved plan missing? runs /msad-dev-planning (bounded review ≤3 rounds, user approval)
+#       - runs /msad-dev-execution (parallel batches, bounded code review ≤3 rounds, draft PR)
 ```
 
-**Speedup:** 18-20 min (parallel) vs 70+ min (sequential)
+**Timeline:** ~10 min (structure + approval) + ~2 min (create) + ~30 min per story (planning gates + execution)
 
-### Pattern B: Detailed Plan + Execution
+**Result:** Draft PRs ready for human review; Frontend/QA stories tracked separately.
 
-**Input:** Epic with complex dependencies or where you want explicit approval
+### Pattern B: Epic Already Has Stories
 
-**Flow:**
+**Input:** Epic/story already structured in Jira (e.g., from a previous `/msad-plan-epic` run).
 
 ```bash
-User: /msad-dev-planning DDIDNS-7732
-
-Planning: Here's your detailed plan:
-  - Phase 1 (CREATE): 7 work packages across 5 repos
-  - Phase 2 (UPDATE): 2 deferred stories
-  - Dependencies: 
-    - Collector error codes → middleware validation
-    - Validator sync: dns.config ↔ middleware
-  - Risks: Windows testing only on CI
-  
-  Reviewer audit: [✓] All AC covered [✓] Dependencies clear
-  
-  Approve? (Y/N/Edit)
-
-User: Approve
-
-User: /msad-dev-execution DDIDNS-7732
-
-[Execution dispatches agents, runs tests, opens draft PRs]
+/msad-dev-epic DDIDNS-10562 --scope story
 ```
 
-**Timeline:** 10 min (planning) + 20 min (execution) = 30 min total
+Skips structure planning entirely. Loops per task: approved plan exists? execute; otherwise plan → review → approval → execute.
 
-### Pattern C: Complete Existing PR Gaps
+### Pattern C: Single Task, Detailed Control
 
-**Input:** Draft PR with identified gap (e.g., missing tests)
-
-**Flow:**
+**Input:** One task, e.g., DDIDNS-10521.
 
 ```bash
-User: /msad-dev-epic DDIDNS-7732
+/msad-dev-planning DDIDNS-10521
+#   → dev plan, bounded review (≤3 rounds), user approval
 
-Epic Execution:
-  ✓ Discovers: PR 507 (DRAFT, 85% complete, gap: missing handler tests)
-  ✓ Classifies: Partial
-  ✓ Dispatches: Agent to complete gap
-  ✓ Agent adds tests, verifies coverage 87% → 92.3%
-  ✓ Commits and pushes to PR branch
-  ✓ Reports: "PR 507 ready for review"
+/msad-dev-execution <plan-path>
+#   → implementation, bounded code review (≤3 rounds), draft PR
 ```
 
-**Timeline:** ~8-9 minutes per partial PR
+Use this when you want to review/approve a single task's plan without going through epic/story orchestration.
 
-### Pattern D: Single-Task Implementation
+### Pattern D: Complete an Existing PR
 
-**Input:** Individual task like DDIDNS-10521
+**Input:** A draft/open PR already exists for a task (e.g., from a previous partial run).
 
-**Flow:**
-
-```bash
-User: /msad-dev-planning DDIDNS-10521
-
-User: /msad-dev-execution DDIDNS-10521
-# OR
-User: /msad-backend-dev DDIDNS-10521
-
-[Agent implements single task, runs tests, opens draft PR]
-```
-
-**Timeline:** 10-30 min depending on complexity
+`/msad-dev-planning` and `/msad-dev-epic` both discover existing PRs automatically (state, blocking findings, coverage) and prefer completing them over opening a duplicate. No special flag needed — just re-run the normal flow for that task.
 
 ### Pattern E: API-Level E2E Testing
 
-**Input:** You want to test zone flows without the Windows agent
-
-**Flow:**
-
 ```bash
-User: /msad-e2e-verify
-
-E2E Verification:
-  ✓ Brought up dns.config + mocked collector
-  ✓ Create zone with local scope → ✓ PASS
-  ✓ Create zone with domain scope → ✓ PASS
-  ✓ Create zone with forest scope → ✓ PASS
-  ✓ Reject invalid scope (legacy) → ✓ PASS
-  ✓ Error code mapping (ZONE-005) → ✓ PASS
+/msad-e2e-verify
 ```
 
-### Pattern F: Code Review (Peer Review)
+Brings up `dns.config` + a mocked collector and drives zone create/update flows via WAPI v3 (no Windows agent required).
 
-**Input:** PR in one of the MSAD repos
-
-**Flow:**
+### Pattern F: Ad-Hoc Code Review
 
 ```bash
-User: review https://github.com/Infoblox-CTO/ddi.cloud.proxy.middleware/pull/507
-
-Code Review: MSAD-Specific Findings:
-  [✓] Replication-scope allow-list consistent (local/domain/forest)
-  [✓] Idempotency checks present (pre-flight, rollback)
-  [!] SHOULD: Coverage could be improved (87% → 92%)
-  [!] INFO: Validator mirrors dns.config (verified)
-  
-  Verdict: APPROVE (all MUST findings resolved)
+review https://github.com/Infoblox-CTO/ddi.cloud.proxy.middleware/pull/507
 ```
+
+Runs `msad-code-review` against MSAD-specific checklist (validator sync, idempotency, error-code mapping, PowerShell/LDAP safety) plus general code quality — independent of the planning/execution flow, for peer review of any PR.
 
 ---
 
-## Artifact Guide
-
-### Agents
-
-See [agents/README.md](agents/README.md) for details on:
-
-- **`msad-backend-dev`** — writes code (TDD-first, cross-repo aware, PowerShell-safe)
-- **`msad-code-review`** — reviews code (MSAD checklist, severity levels)
-
-**You typically don't invoke these directly.** Planning and execution dispatch them.
-
-### Skills
-
-**Recommended Entry Point:** `/msad-dev-epic <epic-id>` (NEW)
-
-**All Skills:**
-
-| Skill | Purpose | Entry Point | Timeline |
-|---|---|---|---|
-| **`msad-dev-epic`** (NEW) | End-to-end epic automation with subagent orchestration | `/msad-dev-epic DDIDNS-7732` | ~20 min |
-| **`msad-dev-planning`** | Detailed phase-by-phase planning with approval gate | `/msad-dev-planning DDIDNS-7732` | ~10 min |
-| **`msad-dev-execution`** | Execute approved plan, dispatch agents, run tests | `/msad-dev-execution <plan>` | ~20 min |
-| **`msad-backend-dev`** | Implement single task (TDD-first, cross-repo aware) | (dispatched by execution) | ~10-30 min |
-| **`msad-code-review`** | Review PR against MSAD-specific checklist | (dispatched by execution) | ~5-10 min |
-| **`msad-e2e-verify`** | API-level E2E tests (no Windows agent needed) | `/msad-e2e-verify` | ~15 min |
-
-**Typical workflow:** `/msad-dev-epic` → PR review → human merge
-
-### Documentation & References
-
-**Architecture:**
-- **[TOOLKIT-ARCHITECTURE.md](TOOLKIT-ARCHITECTURE.md)** — Full three-tier automation architecture, workflows, capabilities matrix
-
-**Epic Execution:**
-- **[skills/msad-dev-epic/README.md](skills/msad-dev-epic/README.md)** — Epic skill user guide
-- **[skills/msad-dev-epic/EPIC-EXECUTION-GUIDE.md](skills/msad-dev-epic/EPIC-EXECUTION-GUIDE.md)** — Detailed workflow, agent dispatch, error handling
-- **[skills/msad-dev-epic/IMPLEMENTATION.md](skills/msad-dev-epic/IMPLEMENTATION.md)** — Technical implementation details
-
-**Planning & Execution:**
-- **[skills/msad-dev-planning/README.md](skills/msad-dev-planning/README.md)** — Planning skill guide
-- **[skills/msad-dev-execution/README.md](skills/msad-dev-execution/README.md)** — Execution skill guide
-- **[skills/msad-dev-execution/PR-GAP-HANDLING.md](skills/msad-dev-execution/PR-GAP-HANDLING.md)** — 11-step PR gap completion workflow
-
-**References:**
-- **[references/repo-topology.md](references/repo-topology.md)** — Shared knowledge (stacks, commands, validators, proto pairs, test patterns, dependency repos, PR discovery, collector test client)
-- **[references/plan-reviewer-prompt.md](references/plan-reviewer-prompt.md)** — Template for the auto-reviewer agent (loaded by planning skill)
-
-**Examples & Status:**
-- **[DDIDNS-7732-EXECUTION-STATUS.md](DDIDNS-7732-EXECUTION-STATUS.md)** — Live execution status for Phase 1
-- **[IMPLEMENTATION-COMPLETE.md](IMPLEMENTATION-COMPLETE.md)** — Summary of all implementations
-- **[specs/msad-dev-plans/](specs/msad-dev-plans/)** — Generated plans and execution contexts
-
----
-
-## What's New (Recent Improvements)
-
-### Epic Automation Skill (`/msad-dev-epic`)
-
-**Previously:** Manual discovery + sequential task execution
-
-**Now:** Automatic discovery + parallel agent dispatch
-
-- Discovers Jira epic + all linked tasks/stories
-- Discovers existing PRs via GitHub
-- Automatically identifies gaps (missing tests, coverage gaps)
-- Dispatches parallel subagents (one per work item)
-- Completes gaps (for partial PRs) or implements fresh (for not-started)
-- Consolidates results → "All PRs ready for review"
-
-**Speed improvement:** 3.5x faster (20 min vs 70+ min for 7 work items)
-
-### Parallel Subagent Execution
-
-**Previously:** One agent at a time (sequential)
-
-**Now:** Multiple agents in parallel (independent work items)
-
-- PR 507 (handler tests): 8 min
-- PR 508 (review): 3 min
-- PR 241 (error codes): 9 min
-- PR 6300 (audit): 3 min
-- **Sequential:** 23 min | **Parallel:** 18 min
-
-### PR Gap Completion
-
-**New capability:** Toolkit recognizes existing draft PRs with identified gaps and completes them
-
-- Discovers: "PR 507 is 85% done, gap = missing handler tests"
-- Analyzes: reads existing test patterns
-- Generates: test code following the pattern
-- Verifies: coverage 87% → 92.3%
-- Commits & pushes: ready for review
-
-**Faster than rewrite:** 8 min gap completion vs 20+ min fresh implementation
-
----
-
-## FAQ
-
-### Q: How do I start with an epic?
-
-**A:**
-```bash
-/msad-dev-epic DDIDNS-7732
-```
-
-The skill discovers everything (tasks, PRs, gaps) and dispatches agents automatically.
-
-### Q: Can I test ddi.msad.agent locally on Mac?
-
-**A:** No. It's a Windows Service with PowerShell cmdlets. **Local:** unit tests only. **Real:** Windows CI (Jenkins `windows_node_ddi_msad_agent_label`).
-
-The toolkit acknowledges this and points to the right verification gate.
-
-### Q: What if my task spans multiple repos?
-
-**A:** `/msad-dev-epic` detects it automatically. Identifies dependencies (e.g., "proto change must land before middleware"). Dispatches agents respecting the ordering: independent packages run in parallel, dependent packages wait for their dependency.
-
-### Q: What does "gap completion" mean?
-
-**A:** A draft PR is partially done (e.g., 85% complete). Toolkit:
-1. Discovers the gap ("missing handler tests for Conditional Forwarder")
-2. Analyzes existing test patterns
-3. Generates new tests
-4. Verifies coverage improves (87% → 92.3%)
-5. Commits & pushes
-
-Result: PR moves from 85% → 100% complete in ~8 minutes.
-
-### Q: What's the "validation loop"?
-
-**A:** After implementation, code review runs (≤3 rounds):
-1. Code review agent analyzes code
-2. You see findings (MUST fix, SHOULD fix, MAY fix)
-3. You fix or justify
-4. Code review re-runs
-5. When clean, draft PR opens
-
-Prevents landing code with unresolved review findings.
-
-### Q: Can I skip planning and go straight to epic execution?
-
-**A:** Yes, and it's recommended (that's the whole point of `/msad-dev-epic`). 
-
-Use detailed planning only if you want explicit approval gates before execution.
-
-### Q: How do I know if a change is done?
-
-**A:** You get **draft PRs** (not merged, not auto-merged). Each PR:
-- Links to Jira task
-- Lists files changed
-- References cross-repo dependencies
-- Notes any Windows-only testing gates
-- Is ready for human review
-
-You review, request changes, or approve + merge.
-
-### Q: How long does epic execution take?
-
-**A:** ~20 minutes for typical Phase 1 epic (parallel agents)
-
-Breakdown:
-- Discovery: 1-2 min
-- Agent dispatch: 1 min
-- Parallel execution: 15-18 min
-- Result consolidation: 1 min
-
-### Q: What happens to deferred work (Phase 2, QA)?
-
-**A:** `/msad-dev-epic` executes only the active phase (Phase 1) by default.
-
-To execute all phases:
-```bash
-/msad-dev-epic DDIDNS-7732 --all-phases
-```
-
-To execute specific phase:
-```bash
-/msad-dev-epic DDIDNS-7732 --phase 2
-```
-
----
-
-## Key Design Decisions
-
-### 1. Parallel Subagent Dispatch
-
-**Decision:** Dispatch independent work items (PRs/tasks) in parallel instead of sequential execution.
-
-**Benefit:** 20 min (parallel 4 agents) vs 70+ min (sequential) = 3.5x faster for Phase 1
-
-**Implementation:** `/msad-dev-epic` dispatches agents simultaneously; depends ordering is respected (e.g., proto → middleware)
-
-### 2. Gap-Based PR Completion
-
-**Decision:** Toolkit discovers existing draft PRs and completes identified gaps instead of starting from scratch.
-
-**Benefit:** Respects ongoing work, faster to merge (8-9 min to close gap vs 20-30 min for fresh implementation)
-
-**Example:** PR 507 was 85% done with clear gap (missing handler tests); agent completes in 8 min vs rewrite from scratch
-
-### 3. Honest About Windows Testing
-
-**Decision:** If task involves `ddi.msad.agent`, toolkit explicitly says:
-- "Local testing impossible on Mac"
-- "Windows CI will verify" (jenkins `windows_node_ddi_msad_agent_label`)
-- "Stage testing will verify AD replication"
-
-No false claims of "fully tested locally."
-
-### 4. Cross-Repo Contract Discipline
-
-**Decision:** Four replication-scope validators must stay in sync across repos.
-
-**Enforcement:** Planning surfaces this upfront; code review verifies; execution validates
-
-### 5. Plan Auto-Review (Optional)
-
-**Decision:** Fresh-context reviewer agent audits plans for scope, dependencies, assumptions, risks.
-
-**Gate:** Advisory only; you decide on findings before execution
-
-### 6. Human Gate for Merge
-
-**Decision:** Toolkit prepares PRs (all tests pass, coverage ≥80%), but humans must review and approve before merge.
-
-**Rationale:** Preserves human accountability for production code
-
-### 7. Discovery-First Execution
-
-**Decision:** `/msad-dev-epic` discovers tasks + PRs automatically (vs requiring manual plan creation).
-
-**Benefit:** Faster start-up, less manual ceremony, discovers existing work automatically
+## Skills & Agents Reference
+
+| Skill | Purpose | Entry Point |
+|---|---|---|
+| **`msad-plan-epic`** | Structure an epic into Backend/Frontend/QA stories with Gherkin ACs; bounded review + approval gate before Jira creation | `/msad-plan-epic DDIDNS-7732` |
+| **`msad-dev-epic`** | Orchestrate a Backend epic or single story; loops each task through planning (if needed) then execution | `/msad-dev-epic DDIDNS-7732` (or `--scope story`) |
+| **`msad-dev-planning`** | Produce a per-task/story dev plan (Gherkin traceability, conflict-aware batches); bounded review + approval gate | `/msad-dev-planning DDIDNS-10519` |
+| **`msad-dev-execution`** | Execute an approved plan: dispatch implementation agents per conflict-safe batch, bounded code review, draft PR | `/msad-dev-execution <plan-path>` |
+| **`msad-developer`** | Router — classifies input (epic/story/task) and suggests the right skill | `/msad-developer` |
+| **`msad-e2e-verify`** | API-level E2E tests without the Windows agent | `/msad-e2e-verify` |
+
+**Agents** (dispatched internally — you don't invoke these directly):
+
+| Agent | Purpose |
+|---|---|
+| **`msad-backend-dev`** | Implements a single task: TDD-first, cross-repo aware, PowerShell/LDAP-safe |
+| **`msad-code-review`** | Reviews a diff against the MSAD checklist (validator sync, idempotency, error codes) + general code quality, severity MUST/SHOULD/MAY |
+
+See [skills/README.md](skills/README.md) and [agents/README.md](agents/README.md) for full details.
 
 ---
 
 ## PR Quality Bar
 
-PRs from this toolkit follow the pattern set by existing DDIDNS-7732 work:
+PRs opened by this toolkit:
 
-- ✅ Precise Jira/AC cross-references
+- ✅ Precise Jira/AC cross-references, with Gherkin scenario → test traceability
 - ✅ "Intentionally unchanged" call-outs for unrelated code
-- ✅ Cross-repo dependencies documented
+- ✅ Cross-repo dependencies documented (proto regen, validator sync)
 - ✅ Follow-up tickets filed for deferred work
-- ✅ Test coverage (unit, integration, e2e where applicable)
-- ✅ Windows CI verification acknowledged
+- ✅ Test coverage reported (unit, integration, e2e where applicable)
+- ✅ Windows CI verification acknowledged (ddi.msad.agent)
+- ✅ Always **draft** — human review and merge is never automated
 
 ---
 
-## Troubleshooting & FAQ
+## FAQ
 
-### "My epic has no stories/tasks yet. What do I do?"
+**My epic has no stories/tasks yet. What do I do?**
+Run `/msad-plan-epic DDIDNS-7732`. It analyzes the epic and proposes Backend/Frontend/QA stories with repo-scoped tasks; you review and approve before anything is created in Jira.
 
-Use `/msad-plan-epic EPIC-ID` to analyze the epic and generate a recommended structure. It creates Backend/Frontend/QA stories with repo-scoped tasks automatically.
+**Can I skip planning and go straight to execution?**
+No — this is by design. `/msad-dev-execution` refuses to run against a plan whose `status` isn't `approved`, and `/msad-dev-epic` always routes through planning first. This prevents scope creep and undocumented changes; see [Architecture](#architecture-fully-gated-pipeline).
 
-### "Can I run this on an epic with mixed Backend/Frontend tasks?"
+**What if the epic/story already has stories or a plan?**
+The toolkit checks first. `/msad-plan-epic` won't recreate an existing story (it points you to `/msad-dev-epic <id>` to improve it instead); `/msad-dev-planning` detects an existing approved/draft plan and offers to reuse it rather than duplicate it.
 
-Yes! The toolkit automatically classifies Backend vs. Frontend/UI tasks using keywords. Frontend tasks are excluded from dispatch and reported as "managed by separate team". **See [Backend vs. Frontend Task Naming](#backend-vs-frontend-task-naming) for the signal keywords.**
+**How do I execute just one story instead of the full epic?**
+`/msad-dev-epic <story-id> --scope story` — same gating, narrower scope, fewer tasks in flight.
 
-### "How do I execute just one story instead of the full epic?"
+**What if a task already has a draft PR from a previous run?**
+It's discovered automatically (state, blocking review comments, coverage) and completed in place — the toolkit checks out the existing branch rather than opening a duplicate PR.
 
-Use `/msad-dev-story STORY-ID` for faster, single-story orchestration (10-15 min vs 20 min for full epic). Same Backend/Frontend filtering applies.
+**Can I test `ddi.msad.agent` locally on Mac?**
+No — it's a Windows Service with PowerShell cmdlets. Unit tests run locally; full verification happens on Windows CI (`windows_node_ddi_msad_agent_label`). The toolkit states this explicitly rather than claiming false local coverage.
 
-### "What if a task fails during execution?"
+**What does the bounded review loop actually do?**
+Runs a fresh-context reviewer, triages findings as MUST/SHOULD/MAY, and loops (fix → re-review) until zero MUST findings remain or the round cap is hit (2 for structure plans, 3 for dev plans and code review). If it doesn't converge, it stops and hands you the full findings + ledger — never silently proceeds or loops forever.
 
-The failing agent will stop and report the issue. You have three options:
-1. **Fix locally** and restart the agent with more context
-2. **Skip the task** and run other tasks (manual completion later)
-3. **Ask for detailed plan** via `/msad-dev-planning` for more control
-
-### "Do I need to structure the epic in a specific way?"
-
-Yes, for optimal toolkit performance. **See [Suggested Jira Structure](#suggested-jira-structure-for-toolkit-optimization)** for the recommended Epic → Story → Task hierarchy. Or use `/msad-plan-epic` to generate it.
-
-### "What repos should I expect PRs in?"
-
-Depends on your task. **See [references/repo-topology.md](references/repo-topology.md) for which repos are involved**. For zone creation tasks, expect PRs in: dns.config, dns.data, middleware, collector, agent.
-
-### "Can I use this for non-MSAD work?"
-
-This toolkit is MSAD-specific (zone creation, replication scope, error codes, Windows agent). For other work, see if `architecture-hub` has other toolkit templates.
-
-### "How do I troubleshoot a plan?"
-
-Use `/msad-dev-planning EPIC-ID` with the `--edit` or `--review` flags to audit the plan interactively. The plan auto-review agent flags gaps, unclear dependencies, and missing AC coverage.
-
-### "Are there limits on epic size?"
-
-No hard limits, but practical guidance:
-- **Small epic (1–2 stories, 3–5 tasks):** Use `/msad-dev-story` (faster)
-- **Medium epic (3–5 stories, 10–15 tasks):** Use `/msad-dev-epic` (20 min)
-- **Large epic (6+ stories, 20+ tasks):** Use `/msad-dev-planning` first for detailed coordination
+**Are there limits on epic size?**
+No hard limit. For a large epic (6+ stories), still start with `/msad-plan-epic` — the structure plan and per-story gating scale the same way regardless of size.
 
 ---
 
@@ -862,12 +517,6 @@ No hard limits, but practical guidance:
 
 **Skill & Agent Details:**
 - **[skills/README.md](skills/README.md)** — All 6 skills + orchestration
-  - `/msad-plan-epic` — Epic structure planning with review gate
-  - `/msad-dev-epic` — Epic/story orchestration (planning ⟶ execution)
-  - `/msad-dev-planning` — Per-task development plan with review gate
-  - `/msad-dev-execution` — From approved plan (parallel dispatch + code review)
-  - `/msad-developer` — Router (classifies input, suggests skill)
-  - `/msad-e2e-verify` — API-level E2E tests (no Windows agent needed)
 - **[agents/README.md](agents/README.md)** — Agent details + MSAD checklist
 
 **Reference Material — Gated Pipeline & Standards:**
@@ -880,65 +529,9 @@ No hard limits, but practical guidance:
 **Reference Material — Repository & Commit Standards:**
 - **[references/repo-topology.md](references/repo-topology.md)** — 6 repos (stack, commands, validators, files, contracts)
 - **[references/default-branches.md](references/default-branches.md)** — Per-repo default branch
-- **[references/git-commit-discipline.md](references/git-commit-discipline.md)** — Atomic commit patterns (additions ⟶ modifications ⟶ deletions)
+- **[references/git-commit-discipline.md](references/git-commit-discipline.md)** — Atomic commit patterns (additions → modifications → deletions)
 
 **External Links:**
 - **[DDIDNS-7732 Epic](https://infoblox.atlassian.net/browse/DDIDNS-7732)** — The canonical zone creation epic
 - **[architecture-hub](https://github.com/Infoblox-CTO/architecture-hub)** — Specs, contracts, design docs
 - **[Infoblox-CTO GitHub](https://github.com/Infoblox-CTO)** — All 6 canonical repos
-
----
-
-## Getting Started
-
-### Fastest Path (Recommended)
-
-1. **Install the toolkit** — See [Installation](#installation)
-2. **Have a Jira epic** (e.g., DDIDNS-7732)
-3. **Three commands:**
-   ```bash
-   /msad-plan-epic DDIDNS-7732    # (5 min) Structure the epic
-   /msad-dev-epic DDIDNS-7732        # (20 min) Execute all Backend stories in parallel
-   ```
-4. **Review draft PRs** when notified (parallel to Frontend team's work)
-5. **Approve & merge** when ready
-
-### Alternative: Detailed Planning + Execution
-
-For more control or complex dependencies:
-
-```bash
-/msad-dev-planning DDIDNS-7732      # (10 min) Generate detailed plan + auto-review
-# → Approve plan
-/msad-dev-execution DDIDNS-7732     # (20 min) Execute with validation loop (≤3 rounds)
-```
-
-### For Single Story (Faster)
-
-```bash
-/msad-dev-story DDIDNS-10562        # (10-15 min) Execute one story
-```
-
----
-
-## Metrics
-
-From DDIDNS-7732 Phase 1 execution:
-
-| Metric | Result |
-|---|---|
-| **PRs processed** | 4 (2 partial with gaps, 2 complete) |
-| **Agents dispatched** | 4 (in parallel) |
-| **Execution time** | ~20 min (parallel) vs 70+ min (sequential) |
-| **Speedup** | 3.5x faster |
-| **Test coverage** | Gap fixes: 87%→92.3%, 85%→92.1% |
-| **Quality gates** | All tests PASS, all lint PASS, all coverage ≥80% |
-| **Ready for merge** | 100% |
-
----
-
-## Support
-
-- **Questions?** See [FAQ](#faq) below or check [TOOLKIT-ARCHITECTURE.md](TOOLKIT-ARCHITECTURE.md)
-- **Issue?** File an issue in this repo
-- **Questions about MSAD ecosystem?** Ask the MSAD team

@@ -25,7 +25,6 @@
     "skill/msad-plan-epic": "0.1.0",
     "skill/msad-dev-planning": "0.1.0",
     "skill/msad-dev-epic": "0.1.0",
-    "skill/msad-dev-story": "0.1.0",
     "skill/msad-dev-execution": "0.1.0",
     "skill/msad-e2e-verify": "0.1.0"
   },

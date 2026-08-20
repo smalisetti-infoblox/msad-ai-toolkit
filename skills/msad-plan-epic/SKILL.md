@@ -169,8 +169,8 @@ STORY 1: DDIDNS-10562 "Backend — Support Domain/Forest Replication Scope on Zo
         Note: Windows-only testing (CI only)
 
   Toolkit Recommendation:
-    Use: /msad-dev-story DDIDNS-10562
-    Expected time: 15 minutes (5 agents in parallel)
+    Use: /msad-dev-epic DDIDNS-10562 --scope story
+    Expected time: ~30 minutes (per-task planning gates + parallel-safe execution)
     Expected result: 5 Backend PRs ready for review
 
 ---

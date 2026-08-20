@@ -1,6 +1,6 @@
 # Functional-Area Classification — Backend vs. Frontend/UI
 
-Single source of truth for classifying Jira tasks/stories as Backend (toolkit-managed) or Frontend/UI (excluded from toolkit dispatch). Cited by `msad-dev-planning`, `msad-dev-epic`, and `msad-dev-story` (post-merge) instead of copy-pasting the keyword lists.
+Single source of truth for classifying Jira tasks/stories as Backend (toolkit-managed) or Frontend/UI (excluded from toolkit dispatch). Cited by `msad-dev-planning` and `msad-dev-epic` instead of copy-pasting the keyword lists.
 
 ## Classification Rule
 
@@ -102,5 +102,4 @@ Same pattern: list all linked tasks/stories for the epic, classify each, report 
 After implementation, verify:
 - `msad-dev-planning` Step 2b cites this doc (no inlined keyword list).
 - `msad-dev-epic` Step 1 cites this doc (no inlined keyword list).
-- `msad-dev-story` (if not yet merged into `msad-dev-epic`) also cites this doc.
 - Grep the repo for the old triplicated keyword lists and confirm they're removed / replaced with citations.

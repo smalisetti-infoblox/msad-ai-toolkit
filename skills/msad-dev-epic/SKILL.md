@@ -206,9 +206,7 @@ The skill discovers and prioritizes existing PR review comments:
 - **Non-blocking comments** (e.g., "Consider refactoring X") → Should address
 - **Informational comments** → Acknowledge in PR body
 
-Agents receive comment context and address feedback systematically. Final PR body documents which comments were resolved.
-
-See [REVIEW-COMMENT-HANDLING.md](REVIEW-COMMENT-HANDLING.md) and [COMMENT-INTEGRATION-GUIDE.md](COMMENT-INTEGRATION-GUIDE.md) for details.
+Agents receive comment context and address feedback systematically. Final PR body documents which comments were resolved. This is the same PR-context discovery described in Step 1.4 above — no separate workflow.
 
 ## Limitations & Future Work
 
@@ -228,7 +226,7 @@ See [REVIEW-COMMENT-HANDLING.md](REVIEW-COMMENT-HANDLING.md) and [COMMENT-INTEGR
 
 ## Related Skills
 
-- **`/msad-dev-epic --scope story`** — same orchestrator, scoped to a single story (smaller scope, faster); use for one-story focus (equivalent to old `/msad-dev-story`)
+- **`/msad-dev-epic --scope story`** — same orchestrator, scoped to a single story (smaller scope, faster); use for one-story focus
 - **`/msad-dev-planning`** — invoked internally by this skill (Step 2a) to create/review plans per task; also available standalone for detailed analysis
 - **`/msad-dev-execution`** — invoked internally by this skill (Step 2b) to execute approved plans; also available standalone
 - **`/msad-backend-dev`** — implements a single task; dispatched as subagent by `/msad-dev-execution`

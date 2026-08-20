@@ -9,7 +9,7 @@
     {
       "name": "msad-ai-toolkit",
       "source": ".",
-      "description": "Multi-repo orchestration for DDIDNS-7732: msad-backend-dev/msad-code-review agents, plus msad-developer/msad-dev-planning/msad-dev-execution/msad-e2e-verify skills.",
+      "description": "Fully gated multi-repo orchestration for DDIDNS-7732: msad-backend-dev/msad-code-review agents, plus msad-plan-epic/msad-dev-epic/msad-dev-planning/msad-dev-execution/msad-developer/msad-e2e-verify skills.",
       "version": "0.1.0"
     }
   ]
