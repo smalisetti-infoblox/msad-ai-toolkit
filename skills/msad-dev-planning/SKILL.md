@@ -106,8 +106,10 @@ Example:
 
 ### Questions to Surface
 
-- **Is this ticket part of DDIDNS-7732 (Microsoft DNS zone creation epic)?** If yes, run `gh pr list` (Step 3 below) to discover current related work dynamically, rather than using stale hardcoded PR numbers.
-- **Does this change a replication-scope validator or create a new one?** If yes, flag that mirrors must be updated (dns.config ↔ middleware).
+Ask these for **any** ticket, regardless of which epic or feature it belongs to — don't assume the feature in advance:
+
+- **Does this ticket belong to a parent epic with existing related work?** If yes, run `gh pr list` (Step 3 below) to discover current related work dynamically, rather than assuming no prior work exists.
+- **Does this change a validator that must stay in sync across repos** (e.g., a replication-scope allow-list, an error-code mapping, a zone-type constraint)? If yes, flag which other repos mirror it and must be updated together.
 - **Does this touch a proto file?** If yes, flag that vendored generated code in downstream repos must be regenerated.
 - **Does this involve the Windows agent (ddi.msad.agent)?** If yes, note that local testing is impossible; Windows CI is the verification gate.
 
@@ -254,7 +256,7 @@ List open questions:
 
 Ask only what can't be answered from Jira, the repo, or linked tickets. If the answer is in the repo, go answer it first.
 
-**Red flag:** If you can't determine which repos are involved, or if the task is silent on replication-scope constraints (creation vs. update), ask explicitly.
+**Red flag:** If you can't determine which repos are involved, or if the task is silent on a known cross-repo constraint relevant to its feature (e.g., validator sync, creation-vs-update behavior, error-code mapping), ask explicitly.
 
 ## Step 7 — Write Plan with Explicit Scope Boundaries
 

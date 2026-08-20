@@ -1,7 +1,7 @@
 ---
 name: msad-e2e-verify
-description: "End-to-end verification of MSAD zone operations via API (without the Windows agent). Brings up the dns.config service with mocked MSAD collector, drives zone create/update/delete flows via WAPI v3, verifies replication-scope handling, and asserts on DB state and mocked responses. Use to validate replication-scope logic end-to-end at the API layer."
-version: 0.1.0
+description: "End-to-end verification of any MSAD zone/record feature via API (without the Windows agent). Brings up the dns.config service with a mocked MSAD collector, drives zone/record create/update/delete flows via WAPI v3 for whatever feature is under test, and asserts on DB state and mocked collector calls. Reads the Gherkin scenarios from the task's dev plan to know what to test — not hardcoded to any one feature."
+version: 0.2.0
 created_by:
   name: Claude Code
   role: AI SDLC for MSAD epic
@@ -9,29 +9,31 @@ created_by:
 
 # MSAD E2E Verification
 
-End-to-end verification skill for MSAD zone operations at the API layer. Since the Windows MSAD agent (`ddi.msad.agent`) cannot be executed or tested on Mac/Linux, this skill verifies replication-scope logic and error handling as far as possible: WAPI v3 zone creation → middleware interceptor → mocked MSAD collector gRPC boundary.
+End-to-end verification skill for **any** MSAD zone/record feature at the API layer — replication scope, idempotency, error-code mapping, audit logging, zone-transfer settings, or anything else a story/task introduces. Since the Windows MSAD agent (`ddi.msad.agent`) cannot be executed or tested on Mac/Linux, this skill verifies as much of the flow as possible without it: WAPI v3 request → middleware interceptor → mocked MSAD collector gRPC boundary → DB persistence.
+
+**This skill does not have a fixed set of test cases.** It derives what to test from the Gherkin scenarios in the governing dev plan (see `references/bdd-acceptance-criteria.md`) or from whatever the user describes. The worked examples in this doc (replication scope, idempotency) are illustrations of the pattern, not an exhaustive checklist to run every time.
 
 ## Scope & Limitations
 
-### What This Skill Can Verify
+### What This Skill Can Verify (for any feature)
 
-- **Request construction:** zone create/update requests with replication-scope parameters are built correctly
-- **Middleware routing:** the interceptor correctly routes MSAD-bound zones to the collector
-- **Scope validation:** replication-scope allow-list is enforced (reject `legacy`, accept `local`/`domain`/`forest`)
+- **Request construction:** the request under test is built correctly (whatever fields the feature adds/changes)
+- **Middleware routing:** the interceptor routes MSAD-bound zones/records to the collector correctly
+- **Validation logic:** allow-lists, required-field checks, and rejection paths behave as the feature's AC specifies
 - **Error handling:** agent error codes (mocked as if from the collector) are correctly mapped to gRPC status codes
-- **DB persistence:** DDI zone table reflects the replication scope and other metadata correctly
-- **Idempotency:** pre-flight duplicate-zone checks work; rollback markers are correct
+- **DB persistence:** the DDI table reflects the feature's data correctly after the request
+- **Idempotency / duplicate handling:** pre-flight checks and rollback markers, when the feature involves them
 
 ### What This Skill CANNOT Verify
 
-- **PowerShell cmdlet execution** (real `Add-DnsServerPrimaryZone -ReplicationScope domain`)
+- **PowerShell cmdlet execution** (real `Add-DnsServerPrimaryZone`, `Set-DnsServerConditionalForwarderZone`, etc.)
 - **Active Directory replication** (zone actually replicated across domain controllers)
-- **Real MSAD collector responses** (behavior of actual Windows RPC/LDAP bridge)
+- **Real MSAD collector responses** (behavior of the actual Windows RPC/LDAP bridge)
 
 These gaps are verified via:
 - Unit tests in each repo (xUnit for agent, table-driven for Go services)
 - Windows CI: Jenkins `windows_node_ddi_msad_agent_label` node runs `dotnet test MSADAgent\Agent.Tests`
-- Stage/prod testing: manual, documented in QA tickets (DDIDNS-10510, DDIDNS-10511, DDIDNS-10512 under the epic)
+- Stage/prod testing: manual, tracked in the epic's QA stories (see the governing epic's structure plan for which QA tickets apply — don't assume a fixed set)
 
 ---
 
@@ -40,7 +42,7 @@ These gaps are verified via:
 For **faster collector-only checks** without bringing up the full WAPI v3 + middleware stack, use the MSAD Collector's gRPC test client directly:
 
 **When to use:**
-- Verifying a new replication-scope value or error-code mapping at the collector level
+- Verifying a new value, field, or error-code mapping at the collector level, for any feature
 - Quick gRPC integration check during implementation (before e2e stack tests)
 - Collector-proto changes that need validation before middleware regenerates
 
@@ -53,12 +55,20 @@ For **faster collector-only checks** without bringing up the full WAPI v3 + midd
 1. **Local repos cloned:** `~/ddi.dns.config` and `~/ddi.cloud.proxy.middleware` (middleware is a library, included as a dependency in dns.config).
 2. **Docker + docker-compose:** for PostgreSQL, Redis, and the dns.config service. Do NOT install PostgreSQL locally.
 3. **Tools:** curl (or newman for Postman collections), jq, git, make.
+4. **A feature to verify:** a Jira task/story ID with a governing dev plan (`specs/msad-dev-plans/*-plan.md`), or a plain-language description of the flow to test if no plan exists yet.
 
 ---
 
 ## Process
 
-### Step 1: Setup (Docker-Based)
+### Step 0: Identify What to Test
+
+1. **If a Jira ID or plan path is given:** read the dev plan's Gherkin scenarios and Scenario→Test traceability table (see `references/bdd-acceptance-criteria.md`). Each scenario becomes one or more test cases in Step 2 — translate `Given/When/Then` into a request/assert pair.
+2. **If no plan exists (ad-hoc verification):** ask the user which request fields, values, and expected outcomes to test. Don't guess a feature's allow-list or expected status codes.
+3. **State what you're testing before proceeding:**
+   > Step 0 — Verifying `<N>` scenarios from `<plan path or user description>`: `<one-line list of scenario names>`.
+
+### Step 1: Setup (Docker-Based, Generic Regardless of Feature)
 
 1. **Start all dependencies via docker-compose:**
    ```bash
@@ -73,341 +83,183 @@ For **faster collector-only checks** without bringing up the full WAPI v3 + midd
 2. **Confirm the dns.config service is running:**
    ```bash
    curl -s http://localhost:8080/health | jq .
-   # Expected: {"status": "healthy"} or similar
    ```
-   If the service fails to start, check logs:
-   ```bash
-   docker-compose logs dns-config  # or whatever the service is named in docker-compose.yml
-   ```
+   If the service fails to start, check logs: `docker-compose logs dns-config` (or the actual service name in docker-compose.yml).
 
-3. **Identify the WAPI v3 endpoint** (usually `http://localhost:8080/api/v3/...` — check the docker-compose.yml or Makefile for exact port).
+3. **Identify the WAPI v3 endpoint** (usually `http://localhost:8080/api/v3/...` — check docker-compose.yml or the Makefile for the exact port).
 
-4. **Provision a test account/view/JWT** (the existing `k6/` or test fixtures in dns.config should populate these automatically; if not, use curl to create):
+4. **Provision a test account/view/JWT** (existing `k6/` fixtures should populate these; otherwise create manually):
    ```bash
-   # Example (adjust to your auth scheme):
    JWT=$(curl -s -X POST http://localhost:8080/auth/login -d '{"user":"test","pass":"test"}' | jq -r .token)
    ACCOUNT_ID=$(curl -s -H "Authorization: Bearer $JWT" http://localhost:8080/api/v3/accounts | jq -r '.[] | select(.name == "test-account") | .id')
    VIEW_ID=$(curl -s -H "Authorization: Bearer $JWT" http://localhost:8080/api/v3/views | jq -r '.[] | select(.name == "test-view") | .id')
    ```
 
-5. **Verify the middleware's mocked MSAD collector is enabled:**
-   Check `ddi.cloud.proxy.middleware/pkg/interceptor_handlers.go` or `main.go` (in dns.config's integration context) — the `CloudProxyHandler` should be wired to use the `MockCloudProxyClient` from `pkg/mocks` when running in test mode, not dialing a real remote service.
+5. **Verify the middleware's mocked MSAD collector is enabled:** `CloudProxyHandler` should be wired to `pkg/mocks.MockCloudProxyClient` in test mode, not dialing a real remote service.
 
-**Cleanup after testing:**
-```bash
-docker-compose down             # stops and removes containers
-```
+**Cleanup after testing:** `docker-compose down`
 
 State:
-> Step 1 — Setup complete. dns.config running at `<endpoint>`. PostgreSQL running in container. Test account: `<account-id>`, view: `<view-id>`.
+> Step 1 — Setup complete. dns.config running at `<endpoint>`. Test account: `<account-id>`, view: `<view-id>`.
 
-### Step 2: Test Cases
+### Step 2: Run Test Cases Derived From Step 0's Scenarios
 
-Run the following request sequences via curl or a test runner (newman, k6, or a custom bash loop). Each case asserts on:
-- HTTP response status and body
-- DDI zone table row (replication-scope value, zone type, metadata)
-- Mocked collector response captured in logs or via spy/mock assertion
+For **each** scenario identified in Step 0, construct a request/assert pair:
 
-#### Test Case 2A: Create Auth Zone with Local Scope
+1. **Map the scenario's `Given` to request fields** (whatever the feature's request shape requires — not limited to any particular field).
+2. **Send the request** (`POST`/`PATCH`/`DELETE` per the scenario's `When`).
+3. **Assert per the scenario's `Then`:**
+   - HTTP response status and body match the expected outcome
+   - Relevant DDI table row(s) reflect the expected state (only check the fields the feature actually touches)
+   - Mocked collector received the expected call (via logs or a spy/mock assertion), if the feature reaches the collector
 
-```bash
-POST /api/v3/zones
-Headers: Authorization: Bearer $JWT, Content-Type: application/json
+State per case:
+> Test case `<name>`: `<pass/fail>` — `<one-line reason if fail>`.
 
-Body:
-{
-  "name": "local.test.com",
-  "zone_type": "primary_auth",
-  "replication_scope": "local",
-  "view_id": "$VIEW_ID",
-  "account_id": "$ACCOUNT_ID"
-}
-
-Expected:
-- HTTP 201 Created
-- DB row: zones.replication_scope = "local"
-- Middleware called collector Create RPC with replication_scope="local"
-```
-
-#### Test Case 2B: Create Auth Zone with Domain Scope
-
-```bash
-POST /api/v3/zones
-{
-  "name": "domain.test.com",
-  "zone_type": "primary_auth",
-  "replication_scope": "domain",
-  "view_id": "$VIEW_ID",
-  "account_id": "$ACCOUNT_ID"
-}
-
-Expected:
-- HTTP 201 Created
-- DB row: replication_scope = "domain"
-- Middleware routed to MSAD collector with domain scope
-```
-
-#### Test Case 2C: Create Forward Zone with Forest Scope
-
-```bash
-POST /api/v3/zones
-{
-  "name": "forest.test.com",
-  "zone_type": "forward",
-  "replication_scope": "forest",
-  "view_id": "$VIEW_ID",
-  "account_id": "$ACCOUNT_ID"
-}
-
-Expected:
-- HTTP 201 Created
-- DB row: replication_scope = "forest"
-- Middleware routed to MSAD collector with forest scope
-```
-
-#### Test Case 2D: Reject Create with Invalid Scope (Legacy)
-
-```bash
-POST /api/v3/zones
-{
-  "name": "invalid.test.com",
-  "zone_type": "primary_auth",
-  "replication_scope": "legacy",
-  "view_id": "$VIEW_ID",
-  "account_id": "$ACCOUNT_ID"
-}
-
-Expected:
-- HTTP 400 Bad Request (or 422 Unprocessable Entity)
-- Error message: "replication scope 'legacy' is not valid for zone creation" (or similar)
-- DB row: zone NOT created
-- Middleware validation blocked before calling collector
-```
-
-#### Test Case 2E: Duplicate Zone Check
-
-Create the same zone twice:
-
-```bash
-POST /api/v3/zones
-{ "name": "dup.test.com", "zone_type": "primary_auth", "replication_scope": "local", ... }
-
-# First call: HTTP 201
-# Second call with same name/account/view: HTTP 409 Conflict (or codes.AlreadyExists in gRPC)
-
-Expected:
-- First request succeeds; zone created in DB
-- Second request fails before calling collector (pre-flight duplicate check)
-- DB still has one zone row (no orphan)
-```
-
-#### Test Case 2F: Update Forward Zone Replication Scope
-
-Replication scope changes are allowed for Forward zones (DDIDNS-10547); Auth zones forbid them (write-once).
-
-```bash
-# Create
-POST /api/v3/zones
-{ "name": "mutable.test.com", "zone_type": "forward", "replication_scope": "local", ... }
-# Returns 201, zone_id = X
-
-# Update
-PATCH /api/v3/zones/X
-{ "replication_scope": "domain" }
-
-Expected:
-- HTTP 200 OK (or 204 No Content)
-- DB row: zones.replication_scope updated to "domain"
-- Middleware called collector Update RPC with new scope
-```
-
-#### Test Case 2G: Error Code Mapping
-
-Mock a collector error (e.g., `ZONE-001` for "zone already exists" from AD). Assert that the middleware translates it to the correct gRPC status code.
-
-```bash
-# In the middleware's mock setup (or via test harness), inject:
-# mock_collector_response.err_info = "... ErrorCode: ZONE-001 ..."
-
-POST /api/v3/zones
-{ "name": "error-test.com", ... }
-
-Expected:
-- HTTP 409 Conflict (gRPC codes.AlreadyExists)
-- Error message includes the agent error details
-```
-
-State:
-> Step 2 — Test cases: 2A–2G executed. Results:
-> - 2A (local scope): `<pass/fail>`
-> - 2B (domain scope): `<pass/fail>`
-> - 2C (forest scope): `<pass/fail>`
-> - 2D (reject legacy): `<pass/fail>`
-> - 2E (duplicate check): `<pass/fail>`
-> - 2F (update scope): `<pass/fail>`
-> - 2G (error mapping): `<pass/fail>`
+State after all cases:
+> Step 2 — `<N>` test cases executed, `<P>` passed, `<F>` failed.
 
 ### Step 3: Data Model & DB Verification
 
-Spot-check the DDI DB:
+Spot-check the DDI DB for whatever table(s) the feature touches (usually `zones`, sometimes `records` or an audit table):
 
 ```bash
-# Connect to postgres (docker exec or via psql client)
-SELECT id, name, zone_type, replication_scope, account_id, view_id
+SELECT id, name, zone_type, <feature-relevant-columns>, account_id, view_id
   FROM zones
   WHERE name LIKE '%.test.com'
   ORDER BY created_at DESC;
 ```
 
-Verify:
-- All test zones are present
-- `zone_type` values match input (primary_auth → auth, forward → forward)
-- `replication_scope` values are correct (local/domain/forest, not legacy)
-- Foreign keys (account_id, view_id) are valid
+Verify only the columns relevant to the feature under test — don't assert on unrelated fields.
 
 State:
-> Step 3 — DB: `<N>` test zones created. All replication-scope values correct. No orphans.
+> Step 3 — DB: `<N>` test rows created/updated. Feature-relevant fields correct. No orphans.
 
 ### Step 4: Middleware Logging & Mocked Collector Assertions
 
-If the middleware logs gRPC requests/responses or the mock collector captures calls, inspect them to confirm the flow:
-
-```bash
-# Check middleware logs for:
-# "CloudProxyHandler.Handle: routing zone create to MSAD collector"
-# "collector.Create request: replication_scope=domain"
-
-# Check mock collector for:
-# "Zones.Create called with: zone_name=..., replication_scope=..."
-```
-
-Assert:
-- Scope value was transmitted to the collector unchanged
-- Error codes (if any) were mapped correctly
+If the feature reaches the collector, inspect middleware logs / mock collector call captures to confirm the request was routed and transmitted correctly (field values unchanged, error codes mapped correctly if the scenario tests an error path).
 
 State:
 > Step 4 — Request flow verified. Middleware correctly routed `<N>` requests to mocked collector.
 
 ### Step 5: Cleanup & Documentation
 
-1. Bring down the docker stack:
-   ```bash
-   docker-compose down
-   cd -
-   ```
-
-2. Document the results:
-   - Which test cases passed/failed
-   - Any deferred/blocked tests (e.g., "Docker compose unavailable")
-   - Link to this verification as evidence in PR body
+1. `docker-compose down`
+2. Document results: which scenarios passed/failed, anything deferred/blocked, link this verification as evidence in the PR body (see template below).
 
 State:
 > Step 5 — Cleanup done. E2E verification complete.
 
 ---
 
+## Worked Examples (Illustrations of the Pattern, Not a Fixed Checklist)
+
+### Example 1: Replication Scope (DDIDNS-10562)
+
+Scenarios from that story's dev plan: accept `domain`/`forest` on Auth/Forward creation, reject `legacy` at creation, persist scope correctly.
+
+```bash
+# Accept domain scope
+POST /api/v3/zones
+{ "name": "domain.test.com", "zone_type": "primary_auth", "replication_scope": "domain", "view_id": "$VIEW_ID", "account_id": "$ACCOUNT_ID" }
+# Expected: HTTP 201, DB row replication_scope="domain", collector Create called with domain
+
+# Reject legacy scope
+POST /api/v3/zones
+{ "name": "invalid.test.com", "zone_type": "primary_auth", "replication_scope": "legacy", "view_id": "$VIEW_ID", "account_id": "$ACCOUNT_ID" }
+# Expected: HTTP 400/422, zone NOT created, blocked before calling collector
+```
+
+### Example 2: Idempotency / Duplicate Prevention (DDIDNS-10542)
+
+Scenario: a duplicate zone-creation attempt must not orphan an AD-side zone.
+
+```bash
+# First create succeeds
+POST /api/v3/zones
+{ "name": "dup.test.com", "zone_type": "primary_auth", "replication_scope": "local", ... }
+# Expected: HTTP 201
+
+# Second create with same name/account/view
+POST /api/v3/zones
+{ "name": "dup.test.com", "zone_type": "primary_auth", "replication_scope": "local", ... }
+# Expected: HTTP 409 (or codes.AlreadyExists), fails before calling collector, DB still has exactly one row
+```
+
+### Example 3: Error-Code Mapping (any feature that surfaces agent errors)
+
+```bash
+# Inject a mocked collector error (e.g. ZONE-001 "zone already exists") and confirm translation
+POST /api/v3/zones
+{ "name": "error-test.com", ... }
+# Expected: HTTP 409 (gRPC codes.AlreadyExists), error message includes agent error detail
+```
+
+These three examples show the pattern: **Given/When/Then from the plan → request → assert on status + DB + collector call.** Apply the same pattern to whatever feature you're actually verifying.
+
+---
+
 ## Automation
 
-For repeatability, wrap the above in a shell script or k6 test file:
-
-### Bash Script (`msad-zone-e2e.sh`)
+Wrap Step 2's cases in a shell script or k6 test file for repeatability. Parameterize by scenario rather than hardcoding any one feature's values:
 
 ```bash
 #!/bin/bash
 set -e
-
 JWT=$(...)
 ACCOUNT_ID=$(...)
 VIEW_ID=$(...)
 ENDPOINT="http://localhost:8080/api/v3"
 
-# Test 2A: Local scope
-echo "Test 2A: Create zone with local scope..."
-curl -X POST $ENDPOINT/zones \
-  -H "Authorization: Bearer $JWT" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "local.test.com",
-    "zone_type": "primary_auth",
-    "replication_scope": "local",
-    "view_id": "'$VIEW_ID'",
-    "account_id": "'$ACCOUNT_ID'"
-  }' | jq .
-
-# ... repeat for 2B–2G ...
-
-echo "All tests completed."
-```
-
-### K6 Test (`msad-zones.js`)
-
-Extend the existing `k6/auth_zone.js` pattern:
-
-```javascript
-import http from 'k6/http';
-import { check } from 'k6';
-
-export default function (jwt, accountId, viewId) {
-  // Test 2A: local scope
-  const res = http.post(`${__ENV.ENDPOINT}/zones`, {
-    name: 'local.test.com',
-    zone_type: 'primary_auth',
-    replication_scope: 'local',
-    view_id: viewId,
-    account_id: accountId,
-  }, {
-    headers: { Authorization: `Bearer ${jwt}` },
-  });
-  
-  check(res, {
-    'local scope: status 201': (r) => r.status === 201,
-    'local scope: replication_scope = local': (r) => r.json('replication_scope') === 'local',
-  });
-
-  // ... repeat for other scopes ...
+run_case() {
+  local name="$1" method="$2" path="$3" body="$4" expected_status="$5"
+  echo "Test case: $name"
+  status=$(curl -s -o /tmp/resp.json -w "%{http_code}" -X "$method" "$ENDPOINT$path" \
+    -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" -d "$body")
+  [ "$status" = "$expected_status" ] && echo "  PASS ($status)" || echo "  FAIL (got $status, want $expected_status)"
 }
+
+# Add one run_case call per scenario from Step 0 — do not hardcode a fixed list here.
 ```
+
+Extend the existing `k6/auth_zone.js` pattern similarly, adding one `check()` block per scenario under test.
 
 ---
 
-## Known Gaps & Deferral
+## Known Gaps & Deferral (Environment Limitations, Not Feature-Specific)
 
 | Aspect | Status | Why | Verified By |
 |---|---|---|---|
 | PowerShell cmdlet execution | ❌ Deferred | Windows-only; no Mac/Linux equivalent | Windows CI (Jenkins `windows_node_ddi_msad_agent_label`) + unit tests (xUnit in MSADAgent/Agent.Tests) |
-| Real AD replication | ❌ Deferred | Requires live AD environment | Stage/prod testing (DDIDNS-10510, 10511, 10512) |
+| Real AD replication | ❌ Deferred | Requires live AD environment | Stage/prod testing (see the epic's QA stories) |
 | Real MSAD collector RPC | ❌ Deferred | ddi.msadconnect.proxy unreachable from test env | Unit tests in collector + integration tests in dns.config |
 | Actual zone creation in AD | ❌ Deferred | Requires real MSAD agent + AD | Windows CI + stage testing |
 
-All deferred aspects are **covered by other verification layers** (unit tests, Windows CI, stage testing), so this gap is **not a blocker**.
+All deferred aspects are **covered by other verification layers** (unit tests, Windows CI, stage testing) regardless of which feature is under test — this gap is **not a blocker**.
 
 ---
 
 ## Integration with PR Workflow
 
-Include this skill's verification in the PR body:
+Include this skill's verification in the PR body, listing the actual scenarios tested (not a fixed template):
 
 ```markdown
 ## E2E Verification
 
-- [x] Local scope creation
-- [x] Domain scope creation
-- [x] Forest scope creation
-- [x] Legacy scope rejected
-- [x] Duplicate zone pre-flight check
-- [x] Forward zone scope update
-- [x] Error code mapping (ZONE-001 → codes.AlreadyExists)
-- [x] DB persistence correct
+- [x] <Scenario 1 name>: pass
+- [x] <Scenario 2 name>: pass
+- [ ] <Scenario 3 name>: deferred — <reason>
 
-**Deferred:** real MSAD agent/AD replication (Windows CI + stage testing; tracked in DDIDNS-10510/10511/10512).
+**Deferred:** real MSAD agent/AD replication (Windows CI + stage testing; tracked in <QA ticket IDs from this epic>).
 ```
 
 ---
 
 ## Error Handling
 
-- **docker-compose up fails:** check DNS config's Makefile or README for setup requirements (e.g., postgres running, env vars). Mark deferred if Docker unavailable.
+- **docker-compose up fails:** check dns.config's Makefile or README for setup requirements (e.g., postgres running, env vars). Mark deferred if Docker unavailable.
 - **JWT/account/view creation fails:** use fixtures from `k6/` or create manually via admin API.
 - **WAPI v3 endpoint not found:** check dns.config's service port in docker-compose.yml or logs.
 - **Mocked collector not wired:** confirm middleware is using `pkg/mocks.MockCloudProxyClient` in test mode (check dns.config's integration test setup).
-- **Test fails unexpectedly:** run the single failing test with verbose logging; check middleware + dns.config logs for error details.
+- **No dev plan found for the feature:** ask the user directly which fields/values/expected outcomes to test — don't invent scenarios.
+- **Test fails unexpectedly:** run the single failing case with verbose logging; check middleware + dns.config logs for error details.

@@ -338,40 +338,33 @@ This ensures code doesn't land in a draft PR with unresolved findings.
 
 ## msad-e2e-verify (API-Level E2E Testing)
 
-**End-to-end verification at the API layer without the Windows agent.**
+**End-to-end verification at the API layer without the Windows agent — for any MSAD zone/record feature, not a fixed test suite.**
 
-Brings up dns.config + mocked MSAD collector, drives zone create/update flows via WAPI v3, verifies replication-scope handling and error codes.
+Brings up dns.config + mocked MSAD collector, drives zone/record create/update flows via WAPI v3 for whatever feature is under test, and asserts on DB state and mocked collector calls. Derives what to test from the governing dev plan's Gherkin scenarios (or from a plain description if no plan exists) — replication scope is just one example of a feature it can verify, not its sole purpose.
 
 ### Usage
 
 ```
-User: /msad-e2e-verify
+User: /msad-e2e-verify DDIDNS-10562
 ```
 
-No input needed. The skill brings up the test stack and runs test sequences.
+Give it a Jira task/story ID (reads that task's dev plan for scenarios) or describe the flow to test directly if no plan exists yet.
 
 ### What It Does
 
-1. **Setup:** brings up dns.config service + docker-compose stack
-2. **Test sequences:** drives zone creation/update flows via WAPI v3
-   - Create zone with local scope
-   - Create zone with domain scope
-   - Create zone with forest scope
-   - Reject invalid scope (legacy)
-   - Update zone scope (forward zones only)
-   - Verify error-code mapping (ZONE-001 → codes.AlreadyExists, etc.)
-3. **Assertions:** checks DB state and mocked collector responses
-4. **Teardown:** brings down the stack, reports results
+1. **Identify scenarios:** reads the governing dev plan's Gherkin scenarios, or asks what to test if none exists
+2. **Setup:** brings up dns.config service + docker-compose stack
+3. **Test cases:** one request/assert pair per scenario — construct the request per the scenario's `Given`, send it per its `When`, assert per its `Then` (status code, DB state, mocked collector call)
+4. **Teardown:** brings down the stack, reports pass/fail per scenario
 
 ### Coverage
 
-**Can verify:**
-- Zone creation requests (scope, zone type, account/view)
+**Can verify (for any feature the scenarios describe):**
+- Request construction and validation logic (allow-lists, required fields, rejection paths)
 - Middleware routing to mocked MSAD collector
-- Scope validation (allow-list enforcement)
 - Error-code extraction and mapping
-- DB persistence (replication-scope value, metadata)
-- Pre-flight duplicate checks
+- DB persistence of the feature's relevant fields
+- Pre-flight duplicate checks / idempotency
 - Request/response shape correctness
 
 **Cannot verify:**
