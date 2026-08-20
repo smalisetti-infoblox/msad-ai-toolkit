@@ -325,6 +325,15 @@ For each work package's repo, open a **draft PR** via `gh pr create --draft`:
 
 > Step 6 — PR opened: `<URL>` (draft).
 
+## Non-Blocking CI Verification
+
+After pushing a commit or opening a PR, remote CI (GitHub Actions, Jenkins) takes real wall-clock time — do not sit in a synchronous watch loop for it. Check CI status once; if it's still pending, move on to other available work (the next package in the current batch, another task in the epic, planning for a different ticket) and check back later rather than blocking the whole session on one PR's pipeline.
+
+- **If there's other pending work** (another batch, another task in the plan's execution queue, a different Jira task the user has asked about): switch to it immediately after triggering CI, and only return to check CI status when that other work reaches a natural pause point.
+- **If there's truly nothing else to do right now**, a single bounded wait is acceptable, but prefer polling at sensible intervals over an indefinite blocking watch — and say so explicitly ("CI is running, checking back in ~2 min" rather than going silent).
+- **This applies per-PR, not per-plan.** With multiple work packages/PRs in flight (e.g., a middleware PR and an agent PR for the same task), don't block on the first one's CI before even starting the second's implementation — dispatch both, then check CI on whichever finishes first.
+- **Never treat a pending/in-progress CI check as a reason to stall the bounded code-review loop or PR finalization for a *different*, independent package** — only that package's own gate depends on its own CI.
+
 ## Anti-Patterns
 
 - Don't run without an approved plan. Refuse if frontmatter `status` ≠ `approved`.
@@ -332,6 +341,7 @@ For each work package's repo, open a **draft PR** via `gh pr create --draft`:
 - Don't push to main. Draft PRs only (`--draft` flag).
 - Don't loop more than 3 iterations — surface to user instead.
 - Don't silently skip pre-push checks — record deferral with reason.
+- Don't block the whole session on a single PR's CI run when other approved work is available — dispatch it, move to other pending tasks, and return when CI completes.
 
 ## Error Handling
 

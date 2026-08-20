@@ -276,6 +276,8 @@ Output: Draft PR URLs, one per repo involved
 5. **Step 5: Final checks** — pre-push linter/type-checker (if available)
 6. **Step 6: PR creation** — opens draft PRs cross-linked by dependency
 
+**Non-blocking CI:** after pushing/opening a PR, remote CI takes real wall-clock time. The skill checks status once and moves on to other available work (another batch, another task) rather than sitting in a synchronous watch loop — it comes back to check CI when other work reaches a pause point, not before.
+
 ### Example Flow
 
 ```

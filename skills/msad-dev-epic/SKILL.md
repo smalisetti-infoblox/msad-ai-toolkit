@@ -120,6 +120,7 @@ For each Backend task discovered in Step 1:
 4. **Parallelization:**
    - Backend tasks with no plan-level dependencies can have their (Step 2a + Step 2b) processed in parallel
    - Within a task's plan, Step 5a (conflict-aware batching) determines parallelization of implementation
+   - **Don't block on one task's CI while another is ready to start.** If Task A's PR is pushed and its CI is running, move immediately to Task B's planning/execution rather than waiting idle — see `/msad-dev-execution`'s "Non-Blocking CI Verification" section. Check back on Task A's CI when it completes or when other work reaches a pause point.
 
 ### Step 3: Consolidate & Report
 
