@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Pre-commit hook: prevent documentation drift.
+#
+# Two checks:
+#   1. Repo-topology consistency — every canonical repo listed in
+#      references/repo-topology.md must also be mentioned in README.md.
+#      (This is the exact drift that motivated this hook: cloud.discovery
+#      and cq-source-msad were added to repo-topology.md but README.md's
+#      Six-Repo Ecosystem section was never updated to match.)
+#   2. Doc-touch reminder — if a commit changes "inner detail" files
+#      (skills/, agents/, references/, CLAUDE.md) without touching any
+#      doc file (README.md, CONTRIBUTING.md, or a skill/agent's own
+#      README.md), block and require either a doc update or an explicit
+#      opt-out via SKIP_DOC_CHECK=1.
+#
+# Install (one-time, per clone):
+#   git config core.hooksPath .githooks
+
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+FAIL=0
+
+# --- Check 1: repo-topology.md <-> README.md consistency ---------------
+# Canonical repo list. Update this list (and only this list) when a repo
+# is added to or removed from the MSAD ecosystem — both repo-topology.md
+# and README.md are then checked against it.
+CANONICAL_REPOS=(
+  "ddi.dns.config"
+  "ddi.dns.data"
+  "ddi.cloud.proxy.middleware"
+  "ddi.msad.collector"
+  "ddi.msadconnect.proxy"
+  "ddi.msad.agent"
+  "cq-source-msad"
+  "cloud.discovery"
+)
+
+if echo "$STAGED_FILES" | grep -qE '^references/repo-topology\.md$|^README\.md$'; then
+  for repo in "${CANONICAL_REPOS[@]}"; do
+    in_topology=0
+    in_readme=0
+    grep -qF "$repo" references/repo-topology.md 2>/dev/null && in_topology=1
+    grep -qF "$repo" README.md 2>/dev/null && in_readme=1
+
+    if [ "$in_topology" -eq 1 ] && [ "$in_readme" -eq 0 ]; then
+      echo "❌ Doc drift: '$repo' is documented in references/repo-topology.md but missing from README.md."
+      FAIL=1
+    fi
+    if [ "$in_readme" -eq 1 ] && [ "$in_topology" -eq 0 ]; then
+      echo "❌ Doc drift: '$repo' is mentioned in README.md but missing from references/repo-topology.md."
+      FAIL=1
+    fi
+  done
+
+  if [ "$FAIL" -eq 1 ]; then
+    echo
+    echo "Fix: add the missing repo to the other file (or remove it from CANONICAL_REPOS"
+    echo "in .githooks/pre-commit if it's genuinely no longer part of the MSAD ecosystem)."
+    echo
+  fi
+fi
+
+# --- Check 2: inner-detail changes should touch documentation ----------
+INNER_PATTERN='^(skills/|agents/|references/|CLAUDE\.md$)'
+DOC_PATTERN='^(README\.md$|CONTRIBUTING\.md$|HANDOFF\.md$|skills/.*/README\.md$|agents/README\.md$|skills/README\.md$)'
+
+if [ -z "${SKIP_DOC_CHECK:-}" ]; then
+  touches_inner=$(echo "$STAGED_FILES" | grep -cE "$INNER_PATTERN" || true)
+  touches_doc=$(echo "$STAGED_FILES" | grep -cE "$DOC_PATTERN" || true)
+
+  if [ "$touches_inner" -gt 0 ] && [ "$touches_doc" -eq 0 ]; then
+    echo "⚠️  This commit changes skills/, agents/, references/, or CLAUDE.md but touches no"
+    echo "    documentation file (README.md, CONTRIBUTING.md, or a skill/agent README.md)."
+    echo
+    echo "    Files changed:"
+    echo "$STAGED_FILES" | grep -E "$INNER_PATTERN" | sed 's/^/      - /'
+    echo
+    echo "    If this change is user-visible (new skill behavior, new repo, changed workflow),"
+    echo "    update the relevant doc in the same commit."
+    echo
+    echo "    If this is truly internal (typo fix, comment, formatting) and no doc update is"
+    echo "    needed, re-run with: SKIP_DOC_CHECK=1 git commit ..."
+    FAIL=1
+  fi
+fi
+
+if [ "$FAIL" -eq 1 ]; then
+  exit 1
+fi
+
+exit 0

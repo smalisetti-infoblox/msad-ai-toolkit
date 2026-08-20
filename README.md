@@ -48,6 +48,15 @@
 | **ddi.msadconnect.proxy** | Go | Windows RPC/LDAP bridge |
 | **ddi.msad.agent** | C#/.NET 8 | Windows Service; PowerShell zone controllers (Windows-only testing) |
 
+**Sync / Discovery Repos (reverse direction — MSAD → DDI):**
+
+The six repos above handle DDI → MSAD (create/update/delete, initiated from the Portal/API). A separate pair of repos handles the reverse direction: discovering and syncing existing Microsoft DNS zone state (including zones with `legacy` replication scope, which can only ever arrive via this path — never via creation) back into DDI.
+
+| Repo | Stack | Role |
+|---|---|---|
+| **cq-source-msad** | Go | CloudQuery source plugin; fetches zones/records from the MSAD collector (read-only, no allow-list validation) |
+| **cloud.discovery** | Go | Discovers resources from 20+ providers including MSAD; fans out to BloxOne DDI via the `b1ddi` overlay adapter |
+
 **Dependency Repos (referenced, not owned):**
 
 | Repo | Role |
@@ -55,7 +64,7 @@
 | **atlas.onprem.rpc.server** | Proto-contract dependency of ddi.msadconnect.proxy and ddi.msad.agent (Windows RPC/gRPC dispatcher) |
 | **atlas.onprem.common** | Go module dependency of ddi.msadconnect.proxy (common utilities) |
 
-See `references/repo-topology.md` "Dependency Repos" for how to discover and track additional dependencies.
+See `references/repo-topology.md` for the full two-direction request-flow diagram (write path + sync path, with every validation point cited to source) and "Dependency Repos" for how to discover and track additional dependencies.
 
 ---
 
@@ -97,6 +106,17 @@ ln -s ~/msad-ai-toolkit/skills/* ~/.claude/skills/
 
 # Reload Claude Code
 ```
+
+### Contributing to This Toolkit (Not the MSAD Repos)
+
+If you're editing the toolkit itself (skills, agents, references, this README) rather than using it to work on the six MSAD repos, enable the doc-drift pre-commit hook once per clone:
+
+```bash
+cd ~/msad-ai-toolkit
+git config core.hooksPath .githooks
+```
+
+This blocks commits that (a) add/remove a repo in `references/repo-topology.md` without updating README.md to match, or (b) change `skills/`, `agents/`, `references/`, or `CLAUDE.md` without touching any documentation file. See `.githooks/pre-commit` for the exact checks and the `SKIP_DOC_CHECK=1` escape hatch for genuinely internal changes.
 
 ---
 
