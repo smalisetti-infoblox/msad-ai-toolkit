@@ -56,21 +56,24 @@ Done
 
 ## Step 2: Implementation
 
-For each work package in the plan's implementation section:
+**Preference: Complete existing PRs before creating new ones.** If the plan's context section documents an existing draft/open PR for a task, dispatch `msad-backend-dev` against that PR's branch (checkout PR, add missing work, push updates). Only create new PRs if no existing PR is found.
 
-1. **Dispatch an `msad-backend-dev` agent instance** for that repo/task, passing the task ID and repo path.
-   - For independent work packages (no cross-repo dependency), dispatch multiple agents in parallel (single message, multiple `Agent` tool calls).
-   - For dependent packages (e.g., proto change must land before middleware PR that consumes it), dispatch sequentially.
+Dispatch `msad-backend-dev` agents strictly per the plan's **"Parallel Execution Batches"** section (added by `/msad-dev-planning` Step 5a). This section computes batches by combining the cross-repo dependency DAG (Step 5) with file-level conflict analysis (Step 5a); it ensures no two packages that touch the same file are placed in the same parallel batch.
 
-2. **Await agent completion.** Agent returns: files changed, test results, implementation log.
+1. **For each batch in the plan:**
+   - If batch size = 1 (sequential), dispatch that one agent and await completion.
+   - If batch size > 1 (parallel), dispatch all agents in the batch in a single message (multiple `Agent` tool calls) and await all completions.
+   - **Per package:** If existing PR exists (from plan's PR context), dispatch agent against PR branch; if not, agent creates new branch/PR
 
-3. **Record in the execution log:** which files were touched, test status, any flags the agent raised.
+2. **Await agent completion per agent.** Agent returns: files changed, test results, implementation log.
+
+3. **Record in the execution log:** which files were touched, test status, any flags the agent raised, per package.
 
 State at start:
-> Step 2 — Implementing. Plan has `<N>` work packages.
+> Step 2 — Implementing. Plan has `<N>` batches, `<M>` total work packages.
 
-State after each:
-> Package `<i>`/`<N>` done — `<repo>` `<task-id>`. Tests: `<pass/fail>`.
+State after each batch:
+> Batch `<i>`/`<N>` done. `<K>` packages: `<task-ids>`. Tests: `<all pass/any fail>`.
 
 ## Step 3: Per-Repo Testing & Validation
 
@@ -165,37 +168,50 @@ dotnet test MSADAgent\Agent.Tests\Agent.Tests.csproj  # for documentation; won't
 
 Stop and surface if any test fails that wasn't caught by the agent. Fix or hand back to the agent for a second attempt. **Do not proceed if coverage is below threshold without explicit justification.**
 
-## Step 4: Validation Loop (Bounded)
+## Step 4: Validation Loop (Bounded Code Review)
 
-A **bounded loop with `msad-code-review` as the validator.** Hard cap: **3 iterations.**
+Execute the **bounded review loop** defined in `references/bounded-review-loop.md` with these parameters:
 
-### Per iteration:
+- **artifact:** "code diff" (the branch just implemented)
+- **reviewer:** `msad-code-review` agent
+- **max_rounds:** 3
+- **severity_scheme:** MUST / SHOULD / MAY
+- **convergence_condition:** zero MUST findings; SHOULD findings are either fixed or justified-and-logged
+- **escalation_on_non_convergence:** stop at round 3, surface all findings + ledger to user; user decides (proceed / revise / abandon)
 
-1. **Run `msad-code-review`** on the current branch (or the changed files if tool supports scoping to a range). Record findings.
+**Starting context for the code-review loop:** The approved plan (from `/msad-dev-planning`) contains:
+- Existing PR context (blocking findings from prior reviews, current coverage/test status)
+- Scenario→Test traceability table (what Gherkin ACs must be tested)
+- This context informs what blockers *must* be addressed (not discovered fresh) and what prior attempts have been made
 
-2. **Triage findings:**
-   - **MUST fix** — fix before next review iteration, OR record a one-line justification in the ledger (must be approved by user at end).
-   - **SHOULD fix** — fix unless cost is clearly disproportionate; record any deferral in the ledger.
-   - **MAY fix / INFO** — fix opportunistically or skip.
+### Per iteration of the loop:
 
-3. **Implementation Critique Checklist:**
-   - [ ] Diff matches approved plan; out-of-scope changes flagged/removed
-   - [ ] New file paths and names follow repo conventions
-   - [ ] All MUST findings fixed or justified
-   - [ ] All SHOULD findings triaged
-   - [ ] Tests still pass after fixes
-   - [ ] No merge conflicts with origin main
+1. **Run `msad-code-review`** on the current branch (check the diff). Record findings.
+
+2. **Triage findings** into MUST-fix, SHOULD-fix, MAY-fix.
+
+3. **Apply fixes** for MUST-fix. For SHOULD-fix, either fix or record one-line justification in the ledger (requires user approval at end).
 
 4. **Loop condition:**
-   - If zero MUST and zero SHOULD remaining → **exit loop, proceed to final checks**
-   - If findings remain but cost to fix is disproportionate → **document justification in ledger**
-   - If iteration ≥ 3 and findings persist → **stop, surface to user** (non-convergence usually signals a design call)
+   - If zero MUST and all SHOULD are fixed-or-justified → **CONVERGED**, exit loop, proceed to Step 5.
+   - If MUST or unfixed SHOULD remain and iteration < 3 → loop again (fix → re-review).
+   - If iteration ≥ 3 and MUST or unfixed SHOULD remain → **NON-CONVERGED**, surface to user with ledger.
 
-State per iteration:
-> Validation round `<i>` — `<F>` findings. Status: `<fixed / re-review>`.
+### Implementation Critique Checklist (for msad-code-review to verify)
 
-State on exit:
-> Validation converged after `<i>` iteration(s). `<F>` fixes, `<J>` justified.
+- [ ] Diff matches approved plan; out-of-scope changes flagged/removed
+- [ ] New file paths and names follow repo conventions
+- [ ] All MUST findings fixed or justified
+- [ ] All SHOULD findings triaged
+- [ ] Tests still pass after fixes
+- [ ] No merge conflicts with origin main
+- [ ] Every Gherkin scenario in the linked plan file's traceability table has a corresponding test in the diff (or is explicitly deferred)
+
+**State per iteration:**
+> Code-review round `<i>`/3 — `<F>` findings. Status: `<MUST/SHOULD counts, converged-or-continue>`.
+
+**State on exit:**
+> Validation converged after `<i>` round(s). `<F>` fixes, `<J>` justified. (Or: Non-converged after 3 rounds; see ledger.)
 
 ## Step 5: Final Checks
 
@@ -266,31 +282,43 @@ For each work package:
 
 For each work package's repo, open a **draft PR** via `gh pr create --draft`:
 
+**PR Title:** `<TASK-ID>: <imperative summary>` (e.g., `DDIDNS-10519: Validate Domain/Forest replication scope in middleware`)
+
 **PR body includes:**
 
 ```markdown
-## Summary
-<one paragraph: what + why, from approved plan>
+## What Changed
+<Bullet list of concrete changes, file-by-file or concern-by-concern. Derived from the approved plan's "Changes (by type)" — additions / modifications / deletions.>
 
-## Jira
-<link to task ID(s)>
+## Why It's Needed
+<1-3 sentences: the user-facing or system problem this solves, linked to the story's Gherkin scenario(s) / AC(s). Reference: "Implements Scenario: <name> (Jira: DDIDNS-XXXXX AC#)".>
 
-## Changes
-<file list grouped by area>
+## How It's Implemented
+<Short technical narrative: key functions/files touched, the approach taken (e.g., "extended the allow-list in isValidMSADReplicationScopeForZoneCreate() and mirrored the change in dns.config's validateStubZoneReplicationScopeNotLegacy()"). Cross-repo/contract notes (proto regen, validator sync) called out explicitly.>
+
+## Acceptance Criteria / Scenario Traceability
+| Scenario / AC | Test(s) |
+|---|---|
+| AC1 (Scenario: Domain scope) | pkg/msad_zone_helper_test.go:TestZoneCreate_DomainScope |
+| AC2 (Scenario: Legacy scope rejected) | pkg/service/application/stub_zone_test.go:TestReject_LegacyScope |
 
 ## Tests
-- Unit: <pass/fail>
+- Unit: <pass/fail>, coverage: <X%> (threshold: <Y%>)
 - Integration: <pass/fail/n/a>
+- Race detection: <pass/n/a>
 - E2E: <run/n/a>
 
-## MSAD-Specific Notes
-<any idempotency/rollback notes, error-code mappings, replication-scope validation, etc. — from agent findings or code-review checklist>
+## Future Work / Deferred
+<Anything explicitly out of scope for this PR, with a linked follow-up ticket if one exists. "None" if truly nothing deferred.>
+
+## Optimizations / Trade-offs Considered
+<Any performance/design trade-offs made and why (e.g., "chose allow-list over regex validation for readability; no measurable perf difference per profiling"). "None" if not applicable.>
+
+## Known Issues / Deferred Review Findings
+<Any SHOULD-level findings from the bounded code-review loop that were justified rather than fixed, with the justification. From the review ledger.>
 
 ## Cross-Repo Links
-<if this package depends on or is depended-upon by another PR, link them with "Part of DDIDNS-XXXXX" or "Tracked in DDIDNS-XXXXX">
-
-## Known Issues / Deferred
-<any MUST/SHOULD findings that were justified + ledger entries>
+<"Part of DDIDNS-XXXXX" / "Depends-On DDIDNS-YYYYY" / "Tracked in DDIDNS-ZZZZZ">
 ```
 
 **State:**

@@ -1,5 +1,7 @@
 # MSADDevExecution: Implementation Status
 
+> **⚠️ Non-authoritative example.** This document is an example and may be out of date. See [`SKILL.md`](SKILL.md) for the authoritative execution process.
+
 **Status:** ✅ Implementation complete for handling PR gaps
 
 ---

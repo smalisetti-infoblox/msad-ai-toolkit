@@ -121,6 +121,7 @@ Layer on top of the MSAD-specific items:
 ### Correctness & Completeness
 
 - [ ] All acceptance criteria in the linked Jira task are addressed (or explicitly deferred with a follow-up ticket)
+- [ ] **[MUST]** Every Gherkin scenario in the linked dev plan's "Scenario Traceability" table has a corresponding test in the diff (unit test with `// Scenario: "<name>" (DDIDNS-XXXXX AC#)` comment, integration test, or e2e test) **or** is explicitly deferred with a linked follow-up ticket. Source of truth: the plan file (passed by `/msad-dev-execution` Step 4) contains this table; no Atlassian MCP lookup needed.
 - [ ] New logic includes corresponding test cases (unit, integration, or e2e as appropriate)
 - [ ] Error handling is present and doesn't silently fail
 - [ ] Return types match the contract (proto for gRPC; API schema for REST)

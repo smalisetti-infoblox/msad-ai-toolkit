@@ -1,15 +1,15 @@
 ---
 name: msad-plan-epic
-description: "Epic structure planner for MSAD development. Analyzes a Jira epic and generates a recommended hierarchy of stories and backend/frontend tasks following toolkit patterns. Use before running /msad-dev-epic to ensure optimal epic structure and automatic toolkit filtering."
-version: 0.1.0
+description: "Epic structure planner with mandatory review gates. Analyzes Jira epic, decomposes into Backend/Frontend/QA stories with Gherkin ACs, writes structure plan to disk, runs bounded review loop (≤2 rounds), and gates story/task creation in Jira on user approval. Use before /msad-dev-epic to ensure optimal structure."
+version: 1.0.0
 created_by:
   name: Seshachalam Malisetti
-  role: MSAD Epic Planning
+  role: MSAD Epic Planning with Review Gates
 ---
 
 # MSAD Epic Planner
 
-Analyze a Jira epic and generate a recommended structure of stories and tasks for optimal toolkit automation. Produces a detailed plan showing Backend stories, Frontend stories, and QA stories, with all tasks properly scoped to repos.
+Analyze a Jira epic and generate a recommended structure of stories and tasks for optimal toolkit automation with **mandatory review gates**. Produces a structure plan (with Gherkin ACs per story) that must be bounded-reviewed and user-approved before stories/tasks are created in Jira.
 
 ## Quick Start
 
@@ -19,12 +19,13 @@ Analyze a Jira epic and generate a recommended structure of stories and tasks fo
 
 **Input:** Epic ID (e.g., `DDIDNS-7732`)
 
-**Output:** 
-1. Analysis of epic scope (repos, features, dependencies)
-2. Recommended story hierarchy (Backend, Frontend, QA tracks)
-3. Per-story task breakdown
-4. Jira creation template (markdown or Jira CLI commands)
-5. Option to create stories/tasks in Jira automatically
+**Workflow:** 
+1. Analyze epic scope (repos, features, dependencies)
+2. Decompose into Backend/Frontend/QA stories (with Gherkin scenarios)
+3. Write structure plan to disk (`specs/msad-epic-plans/...`, status: draft)
+4. Bounded review loop (≤2 rounds, fresh-context reviewer)
+5. User approval gate (hard stop for approval before Jira creation)
+6. Once approved: `/msad-plan-epic DDIDNS-7732 --create` creates stories/tasks
 
 ---
 
@@ -45,10 +46,11 @@ Step 2: Decompose into Functional Areas
   ├─ Identify QA/Testing work (E2E, automation, validation)
   └─ Identify Documentation/Other work
 
-Step 3: Group Backend Work into Stories
+Step 3: Group Backend Work into Stories (with Gherkin ACs)
   ├─ Each story: one logical Backend deliverable
   ├─ Story scope: 1–3 repos, tied to one feature
-  └─ Name: "Backend — [feature description]"
+  ├─ Name: "Backend — [feature description]"
+  └─ Gherkin Scenarios: one per AC (Given/When/Then format)
 
 Step 4: Decompose Each Story into Repo-Scoped Tasks
   ├─ Per story, identify per-repo work
@@ -65,10 +67,29 @@ Step 6: Generate QA / Test Stories (if applicable)
   ├─ Test planning, automation, stage validation
   └─ Name: "QA — [test scope]"
 
-Step 7: Output & Create
+Step 7: Write Structure Plan to Disk
+  ├─ Write to: specs/msad-epic-plans/YYYY-MM-DD-<epic-id>-structure-plan.md
+  ├─ Frontmatter: jira, repos, status: draft, created: YYYY-MM-DD
+  ├─ Contents: story hierarchy + Gherkin ACs + task decomposition
+  └─ Status: draft (not ready for approval yet)
+
+Step 7b: Bounded Structure-Plan Review (NEW)
+  ├─ Dispatch fresh-context reviewer agent
+  ├─ Check: work packages scoped, Backend/Frontend split correct, ACs clear
+  ├─ Run bounded-review-loop (max_rounds: 2)
+  ├─ Loop: fix → review until converged or escalate
+  └─ Update plan file with review findings
+
+Step 8: User Approval Gate
+  ├─ Present plan file + review findings to user
+  ├─ Ask: "Approve? (Yes / Approve with edits / Reject)"
+  ├─ If Approve: status: draft → approved
+  └─ If Edits/Reject: return to Step 3 or Step 7
+
+Step 9: Output & Create (Gated on Approved Status)
   ├─ Show recommended hierarchy
-  ├─ Ask: "Create in Jira? (Y/N/Show Template Only)"
-  ├─ If Yes: use Atlassian MCP to create stories/tasks
+  ├─ Ask: "Create stories/tasks in Jira? (Y/N/Show Template Only)"
+  ├─ If Yes: use Atlassian MCP to create stories/tasks (requires approved status)
   └─ If No: output Jira CLI template for manual creation
 ```
 
@@ -289,13 +310,21 @@ For each Backend story, identify per-repo work:
 **Description:**
 [2–3 sentences describing what users can now do]
 
-**Acceptance Criteria:**
-✓ [AC 1: User-facing outcome]
-✓ [AC 2: API layer outcome]
-✓ [AC 3: Middleware outcome]
-✓ [AC 4: Collector outcome]
-✓ [AC 5: Agent outcome (if applicable)]
-✓ [AC 6: Tests cover new behavior; coverage ≥92%]
+**Acceptance Criteria (Gherkin Scenarios):**
+
+```gherkin
+Feature: [Feature Name]
+
+  Scenario: [AC 1 — What user does]
+    Given [precondition]
+    When [action]
+    Then [expected outcome]
+
+  Scenario: [AC 2 — Edge case or validation]
+    Given [precondition]
+    When [action]
+    Then [expected outcome]
+```
 
 **Impacted Repos:** 3–5 repos (list them)
 
@@ -304,6 +333,8 @@ For each Backend story, identify per-repo work:
 - DDIDNS-XXXXX: [repo 2 task]
 - ... (one per repo with changes)
 ```
+
+**Note:** Gherkin scenarios are authored once at the story level. They are imported (not re-authored) by `/msad-dev-planning` and traced (via scenario→test mapping) to native TDD tests (Go table-driven, xUnit) in each repo. See `references/bdd-acceptance-criteria.md` for details.
 
 ### Backend Task Template
 
@@ -366,22 +397,68 @@ Use these prompts to generate story/task structure:
 
 ---
 
+## Step 7b — Structure-Plan Bounded Review
+
+After writing the structure plan to `specs/msad-epic-plans/YYYY-MM-DD-<epic-id>-structure-plan.md` (Step 7), execute a **bounded review loop** per `references/bounded-review-loop.md`:
+
+**Parameters:**
+- **artifact:** "epic structure plan" (the markdown file just written)
+- **reviewer:** fresh-context agent with `references/structure-plan-reviewer-prompt.md`
+- **max_rounds:** 2 (structure plans are cheap to revise)
+- **severity_scheme:** MUST / SHOULD / MAY
+- **convergence_condition:** zero MUST findings
+
+**Reviewer checks:**
+- [ ] Work packages (stories + tasks) are clearly scoped
+- [ ] Backend/Frontend/QA split is correct (no mixed concerns)
+- [ ] Gherkin scenarios are well-formed (Given/When/Then, one per AC)
+- [ ] Per-repo task assignments are correct
+- [ ] Cross-repo dependencies are called out (if any)
+- [ ] No ambiguous or unclear AC language
+
+**Loop:**
+1. Reviewer analyzes plan, returns findings
+2. Triage: Blocking vs. Should-Fix vs. Minor
+3. Apply fixes (or justify deferral)
+4. If converged (zero Blocking) → proceed to Step 8
+5. If non-converged after 2 rounds → surface to user
+
+**Output:** Updated plan file with review ledger (findings + resolutions)
+
+---
+
+## Step 8 — User Approval Gate (HARD STOP)
+
+Present the structure plan to the user:
+
+1. **Show plan file** (full contents): epic summary, story hierarchy, task breakdown, Gherkin ACs
+2. **Show review findings** (if any): Blocking/Should-Fix items + ledger
+3. **Ask for approval:**
+   > "This structure proposes `<N>` stories across Backend/Frontend/QA. Reviewer surfaced `<F>` findings (see above). Approve? (Yes / Approve with edits / Reject)"
+
+**User responses:**
+- **Approve:** stamp `status: draft → approved` in plan file frontmatter; proceed to Step 9
+- **Approve with edits:** user edits plan manually, re-run Step 7b (reviewer) with updated plan, re-present
+- **Reject:** return to Step 2 (decompose differently)
+
+**Critical:** Do NOT create stories/tasks in Jira until `status: approved`. The approval gate ensures Backend/Frontend split is correct and Gherkin ACs are clear before they become permanent Jira tickets.
+
+---
+
 ## Creation Workflow
 
-### Option A: Manual Review (Default)
+### Gated Creation Workflow (Default)
 
 1. Run `/msad-plan-epic DDIDNS-7732`
-2. Review recommended structure
-3. If happy: `/msad-plan-epic DDIDNS-7732 --create`
-4. If changes needed: manually edit Jira stories/tasks
+2. Skill writes structure plan to `specs/msad-epic-plans/...` with `status: draft`
+3. Bounded review loop runs (Step 7b)
+4. User approval gate (Step 8)
+5. User approves → `status: draft → approved` in plan file
+6. Now: `/msad-plan-epic DDIDNS-7732 --create` is allowed (requires `status: approved`)
+7. Skill uses Atlassian MCP to create stories + tasks per approved plan
+8. Reports: "Created 3 stories (5 tasks) in DDIDNS-7732 per approved structure plan"
 
-### Option B: Auto-Create from Planner
-
-1. Run `/msad-plan-epic DDIDNS-7732 --create`
-2. Skill uses Atlassian MCP to create stories + tasks
-3. Links all tasks to their parent story
-4. Links all stories to the epic
-5. Reports: "Created 3 stories (5 tasks) in DDIDNS-7732"
+**Key:** `--create` flag is **gated on `status: approved`**. If you run it before approval, the skill refuses with a message pointing you to the plan file for user approval.
 
 ### Option C: CLI Template for Manual Creation
 

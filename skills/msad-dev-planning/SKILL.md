@@ -33,21 +33,25 @@ created: YYYY-MM-DD
 ```
 Step 1: Intake
   ↓
-Step 2: Jira analysis (epic + linked stories/tasks)
+Step 2: Jira analysis (epic + linked stories/tasks + Backend/Frontend classification)
   ↓
 Step 3: Repo context (grep prior work, test patterns)
   ↓
-Step 4: Per-repo impact (what changes in each repo)
+Step 4: Per-repo impact (what changes in each repo, explicit 'touches' files)
   ↓
-Step 5: Identify cross-repo dependencies (proto, validators, etc.)
+Step 5: Identify cross-repo dependencies (proto, validators, etc. — builds DAG)
+  ↓
+Step 5a: Conflict-aware task batching (file-overlap analysis, parallel batch plan)
   ↓
 Step 6: Clarifying questions (if any)
   ↓
-Step 7: Write plan
+Step 7: Write plan (including Gherkin scenarios + traceability table per package)
+  ↓
+Step 7b: Bounded plan review (≤3 rounds, fresh-context reviewer, ledger-tracked)
   ↓
 Step 8: USER APPROVAL GATE
-  ├─ Approve as-is → done
-  ├─ Approve with edits → revise plan, re-present
+  ├─ Approve as-is → done, status → approved
+  ├─ Approve with edits → revise plan, re-run review, re-present
   └─ Reject → return to step 6
 ```
 
@@ -76,19 +80,12 @@ Produce a structured summary: **fact** (verbatim from Jira), **inference** (deri
 
 ## Step 2b — Functional Area Classification (Backend vs. Frontend/UI)
 
-For each linked ticket (epic's stories/tasks), classify as **Backend** or **Frontend/UI** using keyword matching against the ticket's summary/title:
-
-**Frontend/UI signals** (any of these → classify as Frontend/UI):
-- "portal", "UI", "frontend", "form", "selector", "editor"
-
-**Backend signals** (any of these → classify as Backend):
-- "middleware", "collector", "agent", "dns.config", "dns.data", "proxy", "backend"
-
-**Default:** If no frontend signals match and backend signals are present (or none are present), classify as **Backend**.
+Classify each linked ticket (epic's stories/tasks) as **Backend**, **Frontend/UI**, or **QA/Testing** using keyword matching against the ticket's summary/title. See `references/functional-area-classification.md` for the authoritative signal list (do not duplicate it here — cite the reference).
 
 **Output:** A **Scope Boundaries** table marking each ticket:
 - ✅ **Backend** (in scope for this toolkit, will be dispatched to `msad-backend-dev`)
 - 🚫 **Frontend/UI** (out of scope, not implemented by `msad-backend-dev`, managed by a separate team/track)
+- ❓ **QA/Testing** (handled separately, typically via `msad-e2e-verify` or excluded)
 
 Example:
 
@@ -133,9 +130,9 @@ grep -rn '<keyword>' --include='*.go' --include='*.cs' pkg/ | head -20
 
 Record: likely files/packages, prior implementations, existing test patterns (table-driven in collector, sqlmock in middleware, xUnit in agent), relevant ADRs/docs.
 
-### Existing PR Discovery
+### Existing PR Discovery + Review Analysis
 
-Before writing the plan, discover related open/merged PRs in the affected repos. Use `gh pr list` (see `references/repo-topology.md` "Existing PR Discovery" for exact commands and repo slugs):
+Before writing the plan, discover related open/merged/draft PRs in the affected repos. Use `gh pr list` (see `references/repo-topology.md` "Existing PR Discovery" for exact commands and repo slugs):
 
 ```bash
 # Example: search for PRs mentioning the epic ID
@@ -143,6 +140,19 @@ gh pr list --repo Infoblox-CTO/ddi.msad.collector --search "DDIDNS-7732" --limit
 gh pr list --repo Infoblox-CTO/ddi.cloud.proxy.middleware --search "DDIDNS-7732" --limit 15
 # ... repeat for all involved repos
 ```
+
+**For each discovered PR (including draft PRs):**
+1. **Fetch full PR details:** `gh pr view <PR-URL> --json title,body,state,reviews,comments`
+2. **Parse PR comments/reviews:**
+   - **Blocking findings** (must address before plan): "coverage below threshold", "missing tests", "validator drift"
+   - **Non-blocking feedback** (should address, can be justified): "refactoring suggestion", "performance consideration"
+   - **Informational** (acknowledge in plan): "design notes", "cross-repo implications"
+3. **Record in plan's "Context" section:**
+   - PR URL, current state (DRAFT/OPEN/MERGED), identified gaps (from PR description or comments)
+   - Blocking vs. non-blocking feedback summary
+   - Current test status / coverage from PR (if visible)
+
+This gives the bounded-review-loop (Step 7b) and later the code-review loop (msad-dev-execution Step 4) starting context: what issues already exist, what's been tried, what must be addressed.
 
 Cross-reference any related PRs in the plan's "Context" section (see Step 7 template below) instead of relying on hardcoded PR numbers that go stale.
 
@@ -193,6 +203,38 @@ Package C (dns.config, mirrors validator from B)
 
 Parallel packages (no dependency) can be executed simultaneously via the execution skill.
 
+## Step 5a — Conflict-Aware Task Batching
+
+After the dependency DAG is complete, add a second dimension: **file/package overlap**.
+
+For each work package, explicitly track which files it touches (already gathered informally in Step 4; now formalize it):
+- `touches: [pkg/msad_zone_helper.go, pkg/interceptor_handlers.go]` per package
+
+**Conflict rule:** Two work packages in the **same repo** conflict if:
+- Their `touches` sets intersect (same file), OR
+- Both require regenerating the same generated-code pair (e.g., both need `make protobuf`)
+
+**Batching rule:** Conflicting packages are **never placed in the same parallel dispatch batch**, even if logically independent. Instead, sequence them so package B waits for package A's PR to land or at least branch to be pushed, allowing B to rebase.
+
+Compute batches via topological layering (existing DAG) + greedy graph coloring on the conflict graph. Write a new "Parallel Execution Batches" plan section:
+
+```
+## Parallel Execution Batches
+
+Batch 1 (parallel): Package A (dns.config), Package C (collector)   
+  # no shared files, no dependency
+  
+Batch 2 (parallel): Package B (middleware)                          
+  # depends on A; no file conflicts
+  
+Batch 3 (sequential, after B lands): Package D (middleware, same file as B)
+  # file conflict with B; must sequence
+```
+
+**Small-diff bias:** Flag any single package whose `touches` set exceeds a threshold (e.g., >5 files or >2 distinct concerns) as a candidate for further splitting. Push back to Step 4 to decompose further — this directly serves "small, single-concern diffs" for easier review.
+
+See `references/bounded-review-loop.md` for the execution model that consumes this section.
+
 ## Step 6 — Clarifying Questions
 
 List open questions:
@@ -227,6 +269,10 @@ created: YYYY-MM-DD
 
 - **Jira:** ticket link + parent epic + linked tickets
 - **Prior work:** related PRs (from `gh pr list`), commits, existing implementations
+- **Existing PRs + Review Context:**
+  - PR URL | State (DRAFT/OPEN/MERGED) | Identified Gaps | Blocking Findings | Non-Blocking Feedback | Coverage / Test Status
+  - Example: `PR 507 (DRAFT) | gaps: handler tests | coverage 87% → need 92% | should add e2e | ...`
+  - This context informs the plan's traceability table and helps the bounded-review-loop (Step 7b) and code-review loop (msad-dev-execution) understand what's been tried
 - **Repos involved:** `<list>`, each with 1–2 sentence role
 - **Dependency repos in scope:** (if any beyond the six core repos; e.g., atlas.onprem.rpc.server for agent/proxy work)
 - **Constraints:** Windows-only testing? Proto-dependent? Cross-repo validator sync? Frontend/UI tasks deferred?
@@ -267,14 +313,17 @@ This makes commits clean, reviewable, and bisectable. State in the plan file whi
 - (none — scope expansion, no removals)
 
 **Tests:**
-- Unit test: table-driven cases for allow-list boundaries
+- Unit test: table-driven cases for allow-list boundaries (see traceability table below)
 - Integration: exercise via WAPI v3 (exercise via gRPC mock in middleware tests)
 
 **Dependencies:** none (independent)
 
-**Acceptance criteria addressed:**
-- [ ] AC1: "User can create Domain-replicated zones" — validated at dns.config layer
-- [ ] AC2: "User can create Forest-replicated zones" — validated at dns.config layer
+**Acceptance Criteria / Scenario Traceability**
+
+| Scenario / AC | Test File | Test Function |
+|---|---|---|
+| AC1 (Scenario: Domain scope accepted) | pkg/service/application/stub_zone_test.go | TestZoneCreate_DomainScope |
+| AC2 (Scenario: Forest scope accepted) | pkg/service/application/stub_zone_test.go | TestZoneCreate_ForestScope |
 
 ### Package 2: ddi.cloud.proxy.middleware
 
@@ -294,12 +343,16 @@ This makes commits clean, reviewable, and bisectable. State in the plan file whi
 
 **Tests:**
 - Unit test: scope validation with sqlmock
-- Table-driven test cases in `interceptor_handlers_test.go` covering create with valid/invalid scopes
+- Table-driven test cases in `interceptor_handlers_test.go` covering create with valid/invalid scopes (see traceability table below)
 
 **Dependencies:** none (mirrors dns.config, which is independent)
 
-**Acceptance criteria addressed:**
-- [ ] AC1–2: middleware validates scope before forwarding to MSAD collector
+**Acceptance Criteria / Scenario Traceability**
+
+| Scenario / AC | Test File | Test Function |
+|---|---|---|
+| AC1–2 (Middleware validates scope) | pkg/msad_zone_helper_test.go | TestIsValidMSADReplicationScope |
+| AC1–2 (Handler enforces scope) | pkg/interceptor_handlers_test.go | TestAuthZoneCreateHandler_ValidatesScope |
 
 ### Package 3: ddi.msad.agent (Windows-only)
 
@@ -318,13 +371,17 @@ This makes commits clean, reviewable, and bisectable. State in the plan file whi
 - (none)
 
 **Tests:**
-- Unit test: scope validation (allow-list: local/domain/forest, reject legacy)
+- Unit test: scope validation (allow-list: local/domain/forest, reject legacy) (see traceability table below)
 - Verified via Windows CI only (`windows_node_ddi_msad_agent_label`)
 
 **Dependencies:** none (independent, but requires Windows CI for verification)
 
-**Acceptance criteria addressed:**
-- [ ] AC1–2: agent validates scope at Create time before passing to PowerShell
+**Acceptance Criteria / Scenario Traceability**
+
+| Scenario / AC | Test File | Test Function |
+|---|---|---|
+| AC1–2 (Agent validates scope before PowerShell) | MSADAgent/Agent.Tests/DnsPrimaryZoneControllerTests.cs | ValidateReplicationScope_ValidScopes_Test |
+| AC1–2 (Agent rejects legacy) | MSADAgent/Agent.Tests/DnsPrimaryZoneControllerTests.cs | ValidateReplicationScope_RejectLegacy_Test |
 
 ## Cross-Repo Constraints
 
@@ -370,25 +427,27 @@ This makes commits clean, reviewable, and bisectable. State in the plan file whi
 Once approved, invoke `/msad-dev-execution <plan-path>` to implement.
 ```
 
-## Step 7b — Plan Auto-Review (Mandatory)
+## Step 7b — Bounded Plan Review
 
-After writing the plan and before Step 8, dispatch a **fresh-context reviewer agent** to audit the plan independently. The reviewer is **advisory only** — it surfaces gaps for the user to decide on, never blocks the approval gate.
+After writing the plan and before Step 8, execute the **bounded review loop** defined in `references/bounded-review-loop.md` with these parameters:
 
-1. **Dispatch a new Claude Code agent** (not this skill, a fresh agent) with the prompt template from `references/plan-reviewer-prompt.md`.
-   - Pass: plan file path, Jira ID, list of affected repos.
-   - Expected output: Markdown report with findings (gaps, unclear steps, assumptions, risks).
+- **artifact:** "dev plan" (the markdown file just written)
+- **reviewer:** fresh-context agent with `references/plan-reviewer-prompt.md` (Dev Plan Reviewer variant)
+- **max_rounds:** 3
+- **severity_scheme:** MUST / SHOULD / MAY
+- **convergence_condition:** zero MUST findings; SHOULD items are either fixed or justified-and-logged
+- **escalation_on_non_convergence:** surface all findings + ledger to user; user decides (approve-with-justification / revise-manually / abandon)
 
-2. **Reviewer scope:** check for:
-   - [ ] Per-repo work packages are correctly scoped (no massive "todo" tasks)
-   - [ ] Cross-repo dependencies are explicitly called out (proto, validator sync, error-code additions)
-   - [ ] Acceptance criteria are clearly mapped to implementation steps
-   - [ ] Risk section is realistic (Windows testing gaps, cross-repo coordination, scope creep)
-   - [ ] Assumptions are clearly stated and justified (not silent)
-   - [ ] Questions are either answered or marked Blocking
+The loop will call the reviewer agent, triage findings, apply fixes if needed, and iterate up to 3 rounds. If convergence is achieved, the plan is marked `status: approved` and ready for Step 8 (user confirmation). If the loop exits non-converged after 3 rounds, the user is shown all findings + ledger and must make an explicit decision before proceeding.
 
-3. **Surface the reviewer's output verbatim** to the user in Step 8 alongside the plan.
-
-The value: a fresh-context reviewer catches gaps that self-critique by the same model that wrote the plan tends to miss. If the reviewer surfaces Blocking issues, you can revise (Step 7 → Step 8 loop) before presenting to the user.
+Key reviewer checks:
+- [ ] Per-repo work packages are correctly scoped (no massive "todo" tasks)
+- [ ] Cross-repo dependencies are explicitly called out (proto, validator sync, error-code additions)
+- [ ] Acceptance criteria are clearly mapped to implementation steps, and traceability table is complete
+- [ ] Risk section is realistic (Windows testing gaps, cross-repo coordination, scope creep)
+- [ ] Assumptions are clearly stated and justified (not silent)
+- [ ] Questions are either answered or marked Blocking
+- [ ] Every Gherkin scenario in the story's AC has a corresponding test in the traceability table (or is explicitly deferred)
 
 ---
 

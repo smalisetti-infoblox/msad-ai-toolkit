@@ -12,6 +12,12 @@
 - 🔄 **Cross-Repo Coordination** — Handles proto sync, validator mirrors, error-code mapping
 - 📝 **Jira Guidance** — Structured epic/story templates for optimal toolkit automation
 
+**Mandatory Review Gates:** Every task passes a **bounded-reviewed, approved plan** before implementation. No code path skips planning.
+- Structure-plan review (≤2 rounds) before stories are created in Jira
+- Dev-plan review (≤3 rounds) before any implementation begins
+- Code-review loop (≤3 rounds) before PRs are opened
+- All using shared **bounded-review-loop pattern** with MUST/SHOULD/MAY triage and escalation on non-convergence
+
 **Quick Start:** See [Quick Start](#quick-start-recommended) for your first epic, or [Usage Patterns](#usage-patterns) for worked examples.
 
 ---
@@ -93,9 +99,11 @@ ln -s ~/msad-ai-toolkit/skills/* ~/.claude/skills/
 
 ---
 
-## Quick Start (Recommended)
+## Quick Start (Recommended): Fully Gated Pipeline
 
-### Step 1: Structure Your Epic (One-Time)
+Every task requires an **approved, bounded-reviewed plan** before any code is written. This ensures no duplicate work, respects existing PRs, and makes reviews easier.
+
+### Step 1: Structure Your Epic (With Review Gate)
 
 You have a rough idea. **First, structure the epic:**
 
@@ -104,34 +112,53 @@ You have a rough idea. **First, structure the epic:**
 ```
 
 **What happens:**
-1. Analyzes epic scope (what repos, what features)
-2. Recommends Backend/Frontend/QA story breakdown
-3. Suggests per-story tasks (one task per repo with changes)
-4. Creates stories/tasks in Jira (or shows template)
+1. Analyzes epic scope (repos, features, dependencies)
+2. Decomposes into Backend/Frontend/QA stories (with Gherkin scenarios)
+3. Writes structure plan to disk (`specs/msad-epic-plans/...`)
+4. **Runs bounded review loop** (≤2 rounds, fresh-context reviewer)
+5. **Presents plan for user approval** ← HARD STOP until approved
 
-**Timeline:** ~5 minutes
+**Timeline:** ~10 minutes (including review + approval)
 
-**Result:** Structured epic with Backend stories (toolkit-ready) + Frontend stories (separate team) + QA stories
+**Result:** Approved structure plan with Backend stories (toolkit-ready) + Frontend stories (separate team) + QA stories
 
-### Step 2: Execute the Epic
+### Step 2: Create Stories in Jira (Gated on Approval)
 
-Your epic is now structured. **Run:**
+Once structure plan is **approved**, create stories:
+
+```bash
+/msad-plan-epic DDIDNS-7732 --create
+```
+
+**What happens:**
+- Verifies plan status is `approved` (refuses if status is `draft`)
+- Uses Atlassian MCP to create stories + tasks in Jira
+- Links all tasks to their parent story
+- Links all stories to the epic
+
+**Timeline:** ~2 minutes
+
+**Result:** Jira stories/tasks created per approved structure
+
+### Step 3: Execute the Epic (With Planning Gates Per Story)
+
+Your epic is structured and approved. **Run:**
 
 ```bash
 /msad-dev-epic DDIDNS-7732
 ```
 
-**What happens (automatically):**
+**What happens (automatically, per story):**
 
-1. **Discover** → Fetch epic, list all Backend stories/tasks, find existing PRs
-2. **Classify** → Identify partial PRs (gaps to close), complete PRs, not-started tasks; **filter out Frontend/UI tasks**
-3. **Dispatch** → Launch parallel subagents (one per Backend work item)
-4. **Consolidate** → Collect results, verify tests + coverage
-5. **Report** → "All 7 Backend PRs ready for human review. 3 Frontend tasks excluded (separate team)."
+1. **Discover** → Fetch epic, list Backend stories/tasks, find existing PRs (prefer to complete existing PRs, not create duplicates)
+2. For each Backend task:
+   - Check if approved dev plan exists; if not, invoke `/msad-dev-planning` (plan creation + bounded review + user approval)
+   - Invoke `/msad-dev-execution` (implementation + parallel batches + bounded code-review + draft PR)
+3. **Report** → "All Backend PRs ready for human review. Frontend tasks excluded (separate team)."
 
-**Timeline:** ~20 minutes total (parallel execution)
+**Timeline:** ~30 minutes total (includes per-story planning gates + implementation)
 
-**Result:** All Backend PRs ready for human review + merge; Frontend team works in parallel
+**Result:** All Backend PRs ready for human review + merge; every change has a reviewed plan behind it
 
 ---
 
@@ -183,31 +210,76 @@ If you want explicit approval gates or detailed analysis before execution:
 
 ---
 
-## Architecture: Four-Tier Automation
+## Architecture: Fully Gated Pipeline
+
+Every task requires an **approved, bounded-reviewed plan** before implementation. No code path skips planning.
 
 ```
-Tier 0: /msad-plan-epic (5 min) ← START HERE for new epic
-  ↓ Structure epic into Backend/Frontend/QA stories
-  
-Tier 1: /msad-dev-planning (10 min) ← for detailed approval gates
-  ↓ Generate detailed implementation plan
-  
-Tier 2a: /msad-dev-epic (20 min) ← RECOMMENDED for full epic release
-  ↓ Orchestrate all stories + tasks, automated discovery
-  
-Tier 2b: /msad-dev-story (10–15 min) ← RECOMMENDED for single story
-  ↓ Orchestrate one story, faster granular execution
-  
-Tier 3: /msad-dev-execution (20 min) ← from approved plan
-  ↓ Agent-driven implementation + validation loop
-  
-Manual: /msad-backend-dev (10-30 min)
-  ↓ Single-task implementation
+┌─ EPIC LEVEL ─────────────────────────────────────────┐
+│                                                      │
+│  Step 1: /msad-plan-epic DDIDNS-7732 (5-10 min)    │
+│  ├─ Analyze epic scope                             │
+│  ├─ Decompose into Backend/Frontend/QA stories     │
+│  ├─ Author Gherkin acceptance criteria             │
+│  └─ Write structure plan → specs/msad-epic-plans/  │
+│                                                      │
+│  Step 2: Bounded Structure-Plan Review (≤2 rounds) │
+│  ├─ Fresh-context reviewer checks decomposition    │
+│  ├─ Triage findings: MUST / SHOULD / MAY            │
+│  └─ Converge on final plan                         │
+│                                                      │
+│  Step 3: User Approval Gate (HARD STOP)            │
+│  └─ Plan status: draft → approved (required for creation)
+│                                                      │
+│  Step 4: /msad-plan-epic DDIDNS-7732 --create     │
+│  └─ Create Backend stories + tasks in Jira         │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+                          ↓
+┌─ STORY/TASK LEVEL (per story) ───────────────────────┐
+│                                                      │
+│  Step 5: /msad-dev-planning DDIDNS-10562 (10 min)  │
+│  ├─ Analyze story scope, acceptance criteria       │
+│  ├─ Identify per-repo work packages                │
+│  ├─ Detect conflicts (file-level), compute parallel batches
+│  ├─ Map Gherkin scenarios → TDD tests              │
+│  └─ Write dev plan → specs/msad-dev-plans/         │
+│                                                      │
+│  Step 6: Bounded Dev-Plan Review (≤3 rounds)       │
+│  ├─ Fresh-context reviewer checks implementation   │
+│  ├─ Triage findings: MUST / SHOULD / MAY            │
+│  └─ Converge on final plan                         │
+│                                                      │
+│  Step 7: User Approval Gate (HARD STOP)            │
+│  └─ Plan status: draft → approved (required for execution)
+│                                                      │
+└──────────────────────────────────────────────────────┘
+                          ↓
+┌─ EXECUTION (per parallel batch) ─────────────────────┐
+│                                                      │
+│  Step 8: /msad-dev-execution <plan> (15-20 min)    │
+│  ├─ Dispatch msad-backend-dev per conflict-aware   │
+│  │  batches (parallel-safe, no file conflicts)     │
+│  ├─ Run per-repo tests (docker-compose, make test) │
+│  │                                                  │
+│  ├─ Bounded Code-Review Loop (≤3 rounds)           │
+│  │  ├─ msad-code-review runs on diff               │
+│  │  ├─ Triage findings: MUST / SHOULD / MAY         │
+│  │  ├─ Verify scenario → test traceability         │
+│  │  └─ Converge or escalate to user                │
+│  │                                                  │
+│  └─ Open Draft PRs (per repo)                       │
+│     └─ Rich template: What/Why/How/Scenarios/Tests │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+                          ↓
+                 HUMAN REVIEW GATE
+              (merge is never automated)
 ```
 
 **Typical flow:**
-1. Start with `/msad-plan-epic` (structure the epic once)
-2. Then use `/msad-dev-epic` or `/msad-dev-story` (execute repeatedly as stories change)
+1. `/msad-plan-epic` → structure plan review → approval → create stories (one-time per epic)
+2. Per story: `/msad-dev-planning` → dev plan review → approval → `/msad-dev-execution` (parallel batches)
 
 ---
 
@@ -789,21 +861,26 @@ No hard limits, but practical guidance:
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — Contribution workflow, 6-repo setup
 
 **Skill & Agent Details:**
-- **[skills/README.md](skills/README.md)** — All 7 skills + dependency chain
-  - `/msad-plan-epic` — Structure epics (NEW)
-  - `/msad-dev-epic` — Execute epic (updated)
-  - `/msad-dev-story` — Execute story (NEW)
-  - `/msad-dev-planning` — Detailed plan
-  - `/msad-developer` — Router
-  - `/msad-dev-execution` — From approved plan
-  - `/msad-e2e-verify` — API-level E2E tests
+- **[skills/README.md](skills/README.md)** — All 6 skills + orchestration
+  - `/msad-plan-epic` — Epic structure planning with review gate
+  - `/msad-dev-epic` — Epic/story orchestration (planning ⟶ execution)
+  - `/msad-dev-planning` — Per-task development plan with review gate
+  - `/msad-dev-execution` — From approved plan (parallel dispatch + code review)
+  - `/msad-developer` — Router (classifies input, suggests skill)
+  - `/msad-e2e-verify` — API-level E2E tests (no Windows agent needed)
 - **[agents/README.md](agents/README.md)** — Agent details + MSAD checklist
 
-**Reference Material:**
+**Reference Material — Gated Pipeline & Standards:**
+- **[references/bounded-review-loop.md](references/bounded-review-loop.md)** — Shared parameterized review loop (max_rounds, MUST/SHOULD/MAY, convergence, escalation)
+- **[references/functional-area-classification.md](references/functional-area-classification.md)** — Backend/Frontend/QA signals (definitive keyword list)
+- **[references/bdd-acceptance-criteria.md](references/bdd-acceptance-criteria.md)** — Gherkin authoring + test-traceability rules (no new runner, native TDD only)
+- **[references/plan-reviewer-prompt.md](references/plan-reviewer-prompt.md)** — Dev plan review checklist (per-task planning)
+- **[references/structure-plan-reviewer-prompt.md](references/structure-plan-reviewer-prompt.md)** — Structure plan review checklist (epic decomposition)
+
+**Reference Material — Repository & Commit Standards:**
 - **[references/repo-topology.md](references/repo-topology.md)** — 6 repos (stack, commands, validators, files, contracts)
 - **[references/default-branches.md](references/default-branches.md)** — Per-repo default branch
-- **[references/git-commit-discipline.md](references/git-commit-discipline.md)** — Commit patterns
-- **[references/plan-reviewer-prompt.md](references/plan-reviewer-prompt.md)** — Plan review checklist
+- **[references/git-commit-discipline.md](references/git-commit-discipline.md)** — Atomic commit patterns (additions ⟶ modifications ⟶ deletions)
 
 **External Links:**
 - **[DDIDNS-7732 Epic](https://infoblox.atlassian.net/browse/DDIDNS-7732)** — The canonical zone creation epic

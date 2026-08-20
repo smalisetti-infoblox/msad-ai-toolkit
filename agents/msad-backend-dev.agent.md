@@ -74,7 +74,9 @@ Before modifying anything, read the repo's own CLAUDE.md and Makefile:
 
 ---
 
-## TDD Discipline
+## TDD Discipline (Hard Gate)
+
+**MANDATORY:** You must refuse to write implementation code before a failing test exists. This is a structural gate, not optional.
 
 For **every** change, follow this order:
 
@@ -82,8 +84,9 @@ For **every** change, follow this order:
 
 **Unit tests:** Required for all logic changes. Test the function in isolation.
 - Go repos: table-driven tests using existing patterns (`[]struct{ Setup func(...) }` in the collector; sqlmock for DB context; gomock for gRPC mocks). See `pkg/svc/zones/zones_test.go` and `pkg/msad_zone_helper_test.go` for exact shape.
+  - Test-name convention: include Gherkin scenario reference in the test name or as a `// Scenario: "<name>" (DDIDNS-XXXXX AC#)` comment
 - C# agent: xUnit tests in `MSADAgent/Agent.Tests/`, matching the naming convention in that project.
-- **Do not implement code until the test exists and fails.**
+- **HARD STOP:** Do not implement code until the test exists and fails. If you're tempted to implement before testing, stop, write the test, and verify it fails first.
 
 **Integration tests:** Required when the change crosses service/layer boundaries.
 - **When needed:** DB schema changes, gRPC interceptor changes, error-code mapping changes, cross-repo proto updates.
@@ -346,65 +349,15 @@ Every hunk of code must map to an acceptance criterion in the Jira task. After i
 
 ## Git Commit Discipline
 
-### Commit Structure: Separate Additions, Deletions, Modifications
+Follow the **atomic commit discipline** defined in `references/git-commit-discipline.md`:
+- Plan commits in order: **Additions** (new code/tests only) → **Modifications** (changes to existing code) → **Deletions** (dead code removal)
+- Write clear commit messages with subject, body, details, and Jira reference
+- Never force-push (`--force`, `--no-verify`); use `git revert` if you need to undo
+- Review staged changes before committing (`git diff --cached`); check for secrets
+- Ask the user before committing (no auto-commit)
+- Verify all tests pass and coverage meets threshold before staging
 
-Plan and commit in this order. **Do not mix** addition, deletion, and modification in a single commit:
-
-1. **Additions only** — new files, new functions, new tests (no changes to existing code)
-   - Commit message: "Add [what]. New files: [list]. Purpose: [why, from AC]."
-   - Example: "Add replication-scope validator tests. New files: zones_test.go additions. Tests cover local/domain/forest scopes per DDIDNS-10519."
-
-2. **Modifications** — changes to existing code (logic, refactoring, bug fixes)
-   - Commit message: "Update/Fix [what]. Changed files: [list]. Reason: [AC or bug fix]."
-   - Example: "Update zone validator to accept domain/forest scopes. Changed: pkg/service/application/stub_zone.go. Satisfies DDIDNS-10519 AC1."
-
-3. **Deletions only** — remove dead code, unused imports, deprecated functions
-   - Commit message: "Remove [what]. Deleted files/lines: [list]. Reason: [why safe to delete]."
-   - Example: "Remove legacy replication-scope validator. Deleted: pkg/legacy_scope.go. No longer used (validated in DDIDNS-10562 refactor)."
-
-**Rationale:** Separate commits are easier to review, easier to bisect if issues arise, and clearer in blame history.
-
-### Commit Message Format
-
-```
-<Subject line (imperative, ≤70 chars)>
-
-<Body (wrap at 72 chars, optional but recommended)>
-- <Detail 1: what changed>
-- <Detail 2: why (AC, bug, refactor reason)>
-- <Detail 3: any caveats or deferred work>
-
-Jira: DDIDNS-XXXXX
-Closes: [if applicable]
-```
-
-**Example:**
-```
-Add replication-scope validation to middleware zone-create handler
-
-- New file: pkg/msad_zone_helper_test.go with table-driven tests
-- New function: isValidMSADReplicationScopeForZoneCreate(scope string) bool
-- Validates scope ∈ {local, domain, forest}; rejects legacy
-- Satisfies DDIDNS-10519 AC1 and DDIDNS-10562 AC2
-
-Jira: DDIDNS-10519
-```
-
-### No Force-Push
-
-- **Never force-push** (`git push --force`, `git push -f`, `git reset --hard origin/main`).
-- If you need to undo a commit, use `git revert` or create a new fixup commit.
-- If you made a mistake and haven't pushed yet, `git reset --soft HEAD~1` to undo locally, then re-commit (don't amend).
-- **If the repo has a push hook that fails,** investigate and fix the issue before pushing — don't bypass with `--no-verify`.
-
-### Before Committing
-
-1. **Review staged changes:** `git diff --cached`
-2. **Check for secrets:** grep staged files for credentials, tokens, API keys
-3. **Run final tests:** `make test` (all tests pass)
-4. **Run final lint:** `make fmt` + `make lint` (all checks pass)
-5. **Verify coverage:** if below threshold, add more tests
-6. **Ask the user** before committing (don't auto-commit)
+See `references/git-commit-discipline.md` for the complete discipline and examples.
 
 ---
 

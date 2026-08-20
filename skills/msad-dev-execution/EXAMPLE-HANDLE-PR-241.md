@@ -1,5 +1,7 @@
 # Example: Execute PR 241 Gap (ZONE-005 Update/Delete Tests)
 
+> **⚠️ Non-authoritative example.** This document is an example and may be out of date. See [`SKILL.md`](SKILL.md) for the authoritative execution process.
+
 This example shows how the execution agent handles a different gap type: missing test cases in existing test functions.
 
 ## PR Summary

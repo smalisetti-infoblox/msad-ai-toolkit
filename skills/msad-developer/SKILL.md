@@ -31,11 +31,11 @@ User invokes suggested skill; you don't auto-chain
 
 | Input | Suggested Skill | Rationale |
 |---|---|---|
-| Jira Epic ID (DDIDNS-XXXXX, type=Epic) | `/msad-dev-planning` | Epics go directly to planning; we write a plan for the epic's scope (multi-repo work packages) |
-| Jira Story ID (type=Story) with clear AC and 1–3 repos involved | `/msad-dev-planning` | Stories go to planning to produce a work plan before execution |
-| Jira Task ID (type=Task) in isolation | `/msad-dev-planning` | Tasks are subtasks of stories/epics; planning reads parent context and scopes the work |
+| Jira Epic ID (DDIDNS-XXXXX, type=Epic) | `/msad-plan-epic` | Epics go to structure planning first. Produces a structure plan (stories + tasks + Gherkin ACs), runs bounded review (≤2 rounds), then gates story/task creation in Jira on user approval. After stories are created, use `/msad-dev-epic` to execute them. |
+| Jira Story ID (type=Story) with clear AC and Backend scope | `/msad-dev-epic DDIDNS-10562` | Stories orchestrate all Backend tasks within that story. Internally invokes `/msad-dev-planning` per task (if needed), then `/msad-dev-execution` per task. Excludes Frontend/UI tasks (separate team). |
+| Jira Task ID (type=Task) in isolation, no parent story | `/msad-dev-planning DDIDNS-10521` | Tasks in isolation go to planning to scope against the larger epic (planning reads parent context), write a focused plan, and get user approval before execution. |
 | Plain-text task list (no Jira ticket) | `/msad-dev-planning` | Planning can ingest prose; will create a Jira story if needed or proceed ad-hoc with clear assumptions |
-| "execute the plan at `<path>`" | `/msad-dev-execution` | Execution skill consumes an approved plan file and runs it end-to-end |
+| "execute the plan at `<path>`" | `/msad-dev-execution` | Execution skill consumes an approved plan file and runs it end-to-end (parallel task dispatch, bounded code-review, draft PRs). |
 | "run end-to-end test for replication scope changes" or similar API-level verification | `/msad-e2e-verify` | E2E skill brings up the API stack and drives zone creation/update flows via WAPI v3 without the Windows agent |
 | Ambiguous or multi-faceted | Ask the user | If unclear whether epic or story, or if scope spans multiple independent initiatives, ask which skill to invoke |
 
@@ -93,7 +93,7 @@ If a task mentions a service/component that doesn't map to the six repos, tell t
 **You:**
 1. Fetch the epic via Atlassian MCP. Confirm `issuetype = Epic`.
 2. Note the linked stories/tasks (DDIDNS-10519, DDIDNS-10521, etc.). Count repos (all 5).
-3. Suggest: **`/msad-dev-planning DDIDNS-7732`** — "This is an Epic spanning 5 repos. Planning will break it into independent work packages per repo, identify dependencies, and write a plan. You approve the plan, then `/msad-dev-execution` runs it."
+3. Suggest: **`/msad-plan-epic DDIDNS-7732`** — "This is an Epic spanning 5 repos. Structure planning will decompose it into Backend/Frontend/QA stories with Gherkin ACs, run a bounded review loop (≤2 rounds), and gate story/task creation in Jira on your approval. Once approved, you'll invoke `/msad-dev-epic` per story to orchestrate execution."
 
 ### Example 2: Task Input
 
@@ -135,8 +135,10 @@ If a task mentions a service/component that doesn't map to the six repos, tell t
 
 ## Specialist Skills Index
 
-- **`/msad-dev-planning`** — writes a multi-repo work plan from a Jira epic/story/task, gates on user approval
-- **`/msad-dev-execution`** — runs an approved plan: dispatch agents, validation loop, draft PRs
+- **`/msad-plan-epic`** — epic structure planner; decomposes epic into Backend/Frontend/QA stories + tasks + Gherkin ACs, runs bounded review (≤2 rounds), gates story/task creation in Jira
+- **`/msad-dev-epic`** — epic/story orchestrator; internally loops through `/msad-dev-planning` per task (if needed) and `/msad-dev-execution` per task; filters Frontend/UI tasks (separate team)
+- **`/msad-dev-planning`** — writes a focused work plan from a Jira task/story, includes Gherkin AC mapping + conflict-aware batching, runs bounded review (≤3 rounds), gates on user approval
+- **`/msad-dev-execution`** — runs an approved plan: dispatches agents per conflict-aware batches, bounded code-review validation loop, opens draft PRs
 - **`/msad-e2e-verify`** — API-level end-to-end test suite (no Windows agent needed)
-- **`/msad-backend-dev`** — implementation agent for a single task in a single repo (don't invoke directly; planning dispatches it)
+- **`/msad-backend-dev`** — implementation agent for a single task in a single repo (don't invoke directly; planning/execution dispatches it)
 - **`/msad-code-review`** — review agent for a single PR (don't invoke directly; execution dispatches it)

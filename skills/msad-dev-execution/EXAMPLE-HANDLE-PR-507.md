@@ -1,5 +1,7 @@
 # Example: Execute PR 507 Gap (Conditional Forwarder Handler Tests)
 
+> **⚠️ Non-authoritative example.** This document is an example and may be out of date. See [`SKILL.md`](SKILL.md) for the authoritative execution process.
+
 This example shows exactly how the execution agent would handle PR 507 with its identified gap.
 
 ## PR Summary

@@ -1,5 +1,7 @@
 # Quick Start: MSAD Dev Execution Agent
 
+> **⚠️ Non-authoritative example.** This document is an example and may be out of date. See [`SKILL.md`](SKILL.md) for the authoritative execution process.
+
 **Want to try the agent?** Follow these steps.
 
 ## 1. Run Simulation (No Real Changes)

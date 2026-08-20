@@ -1,15 +1,17 @@
 ---
 name: msad-dev-epic
-description: "End-to-end epic execution orchestrator. Discovers tasks, identifies gaps in draft PRs, dispatches parallel subagents to complete work, and reports consolidated results. Use to drive multi-task epics like DDIDNS-7732 from discovery through ready-for-review."
-version: 0.1.0
+description: "End-to-end epic execution orchestrator with mandatory planning gates. Discovers tasks, ensures each has an approved dev plan (invoking /msad-dev-planning if needed), and orchestrates execution via /msad-dev-execution. Reports Backend PRs ready for review; filters out Frontend/UI tasks."
+version: 1.0.0
 created_by:
   name: Seshachalam Malisetti
-  role: MSAD Epic Orchestration
+  role: MSAD Epic Orchestration with Planning Gates
 ---
 
-# MSAD Developer — Epic Execution
+# MSAD Developer — Epic Execution (with Mandatory Plans)
 
-End-to-end epic automation: discovers tasks, existing PRs, identifies gaps, dispatches subagents, orchestrates execution, reports results.
+End-to-end epic automation with bounded-review planning gates: discovers epic/story tasks, classifies Backend/Frontend, ensures each Backend task has an approved plan (creates via `/msad-dev-planning` if needed), orchestrates execution via `/msad-dev-execution`, reports results.
+
+**Key change:** This skill no longer dispatches implementation agents directly. It loops per-task through `/msad-dev-planning` (if plan missing/draft) and then `/msad-dev-execution`. This ensures **every task passes a bounded-reviewed, approved plan before any code is written.**
 
 ## Quick Start
 
@@ -17,16 +19,14 @@ End-to-end epic automation: discovers tasks, existing PRs, identifies gaps, disp
 /msad-dev-epic DDIDNS-7732
 ```
 
-Input an epic ID. The skill:
-1. Fetches epic + all linked tasks/stories
-2. Discovers existing draft PRs (via `gh pr list`)
-3. Identifies gaps and completion status per PR
-4. Dispatches parallel subagents to:
-   - Complete gaps in partial PRs (add tests, verify coverage)
-   - Review complete PRs (run tests, verify CI)
-   - Implement fresh tasks (if no PR exists)
-5. Consolidates results
-6. Reports: "All PRs ready for human review" or "X issues to resolve"
+Input an epic or story ID. The skill:
+1. Fetches epic/story + all linked Backend tasks (Frontend/UI are listed as excluded)
+2. For each Backend task:
+   - Check if an approved plan exists (search `specs/msad-dev-plans/*-<task-id>-plan.md` with `status: approved`)
+   - If missing/draft: invoke `/msad-dev-planning <task-id>` (plan creation + bounded review + user approval)
+   - Then: invoke `/msad-dev-execution <plan-path>` (implementation + tests + code review + draft PR)
+3. Consolidates all results
+4. Reports: "All Backend PRs ready for human review. X Frontend/UI tasks excluded (separate track)."
 
 ## Inputs
 
@@ -37,68 +37,89 @@ Input an epic ID. The skill:
 ## Process Overview
 
 ```
-Input: Epic ID (DDIDNS-7732)
+Input: Epic/Story ID (DDIDNS-7732 or DDIDNS-10562)
   ↓
 Step 1: Discovery
-  ├─ Fetch epic via Atlassian MCP
-  ├─ List all linked tasks/stories
-  ├─ Classify Backend vs. Frontend/UI (keyword matching on summary)
-  │   ├─ Backend signals: "middleware", "collector", "agent", "dns.config", "dns.data", "proxy", "backend"
-  │   └─ Frontend/UI signals: "portal", "UI", "frontend", "form", "selector", "editor"
-  ├─ Discover existing PRs (gh pr list per repo, only Backend tasks)
-  ├─ Classify: partial vs. complete vs. not-started (Backend PRs only)
-  ├─ Identify gaps per PR (Backend PRs only)
-  └─ Fetch & analyze PR review comments (blocking vs. non-blocking)
+  ├─ Fetch epic/story via Atlassian MCP
+  ├─ List all linked Backend/Frontend/QA tasks (classify per references/functional-area-classification.md)
+  ├─ Keep list of Backend tasks for planning+execution; exclude Frontend/UI for reporting
+  └─ Note existing PRs per Backend task (for context, not direct dispatch)
 
-Step 2: Dispatch Subagents (Parallel, Prioritized) — Backend-Only
-  ├─ For each partial Backend PR with review feedback:
-  │   └─ Agent: address gaps + blocking comments → verify coverage → commit → push
-  ├─ For each complete Backend PR:
-  │   └─ Agent: run tests → verify CI → ready for review
-  └─ For each not-started Backend task:
-      └─ Agent: implement → test → commit → push → draft PR
+Step 2: Loop Per Backend Task — Gated Planning + Execution
+  For each Backend task:
+    ├─ Check: does an approved plan exist? (search specs/msad-dev-plans/*-<task-id>-plan.md with status: approved)
+    │
+    ├─ If NO plan or plan status: draft:
+    │   └─ Invoke /msad-dev-planning <task-id>
+    │       → produces dev plan with Gherkin scenarios + conflict-aware batches
+    │       → bounded-review loop (≤3 rounds, fresh-context reviewer)
+    │       → user approval gate (status: draft → approved)
+    │
+    └─ Invoke /msad-dev-execution <plan-path>
+        → dispatches msad-backend-dev per conflict-aware batches (parallel-safe)
+        → bounded code-review loop (≤3 rounds, msad-code-review agent)
+        → opens draft PR per repo/package
+        → returns result
+
+  Parallel dispatch: Backend tasks with no plan dependencies can be processed in parallel batches
 
 Step 3: Consolidate & Report
-  ├─ Collect all Backend results
+  ├─ Collect all Backend results (plan status + execution status + PR links)
   ├─ Verify all Backend tests passing
   ├─ Verify all Backend coverage ≥80%
-  ├─ Track which review comments were addressed
-  ├─ Generate per-PR summary (Backend PRs only)
-  ├─ List excluded Frontend/UI tasks
-  │   └─ "X tasks excluded — Frontend/UI, managed by separate team: DDIDNS-10544, 10548, 10563"
-  └─ Return: status (ready-for-review / issues-found)
+  ├─ Generate consolidated report
+  ├─ List excluded Frontend/UI/QA tasks
+  └─ Return: status (all-ready-for-review / some-blockers)
 ```
 
 ## Workflow Details
 
 ### Step 1: Discovery
 
-1. **Fetch epic** via `getJiraIssue(DDIDNS-7732)` — get summary, description, status
+1. **Fetch epic/story** via `getJiraIssue(DDIDNS-7732)` — get summary, description, status
 2. **List linked issues** via JQL: `parent = DDIDNS-7732` — all tasks/stories
-3. **Classify Backend vs. Frontend/UI** for each linked task (keyword matching on summary):
-   - **Frontend/UI signals:** "portal", "UI", "frontend", "form", "selector", "editor" → classify as 🚫 Frontend/UI (excluded from dispatch)
-   - **Backend signals:** "middleware", "collector", "agent", "dns.config", "dns.data", "proxy", "backend" → classify as ✅ Backend (will be dispatched)
-   - **No signals:** default to ✅ Backend
-   - **Keep a list of excluded Frontend/UI tasks** for reporting in Step 3
-4. **Discover PRs** — for each Backend task, run `gh pr list --search <task-id>` (skip Frontend/UI tasks)
-5. **Classify Backend PRs:**
-   - **Partial** — DRAFT status + gap identified in description
-   - **Complete** — DRAFT status + no gap identified
-   - **Not-started** — no PR found for task
-6. **Identify gaps** — parse PR description or infer from task AC
-7. **Fetch review comments** — analyze blocking vs. informational feedback
+3. **Classify Backend vs. Frontend/UI** for each linked task. See `references/functional-area-classification.md` for the authoritative signal list (do not duplicate it here — cite the reference).
+   - Classify each task as ✅ **Backend** (in-scope, will be gated + executed), 🚫 **Frontend/UI** (excluded, separate team), or ❓ **QA** (separate handling)
+   - Keep a list of excluded Frontend/UI/QA tasks for reporting in Step 3
+4. **Discover existing PRs + review context** (prefer to COMPLETE existing PRs, not create duplicates):
+   - For each Backend task, run `gh pr list --search <task-id>` to find related PRs (open, draft, merged)
+   - **For each discovered PR:** fetch full PR details, parse comments/reviews, identify:
+     - Current state (DRAFT/OPEN/MERGED)
+     - Blocking findings (must address)
+     - Non-blocking feedback (should address / justify)
+     - Current test status / coverage
+   - **Strategy:** If DRAFT or OPEN PR exists, plan to complete/improve it (checkout branch, add missing work)
+   - **Only create new PR** if no existing PR found for that Backend task
+   - This context informs the plan (what gaps exist, what feedback to address, what's been tried)
+5. **State after discovery:**
+   > Discovery complete. Backend: `<N>` tasks. Existing PRs with context: `<K>` found. Frontend/UI excluded: `<M>`. QA excluded: `<Q>`.
 
-### Step 2: Dispatch Subagents (Parallel)
+### Step 2: Loop Per Backend Task — Gated Planning + Execution
 
-For independent work packages (no cross-repo dependencies), agents run in parallel. Order matters only when:
-- Proto change must land before middleware that consumes it
-- Error-code addition must precede collector mapping PR
+For each Backend task discovered in Step 1:
 
-Each agent receives:
-- Task ID + PR link (if exists)
-- Gap description or full task spec
-- Any blocking review comments
-- Success criteria (coverage ≥92%, tests pass, CI green)
+1. **Check for approved plan:**
+   - Search `specs/msad-dev-plans/` for `*-<task-id>-plan.md` with `status: approved`
+   - If found → proceed to Step 2b (invoke execution)
+   - If not found or `status: draft` → proceed to Step 2a (invoke planning)
+
+2. **Step 2a — Create/Approve Plan (if needed):**
+   - Invoke `/msad-dev-planning <task-id>`
+   - This produces a plan with Gherkin scenarios, conflict-aware task batches, and traceability tables
+   - Runs a bounded-review loop (≤3 rounds, fresh-context reviewer)
+   - User approves: `status: draft → approved`
+   - When approved, the plan file is ready for execution
+
+3. **Step 2b — Execute Approved Plan:**
+   - Invoke `/msad-dev-execution <plan-path>` (path to the approved plan from Step 2a)
+   - Executes strictly per the plan's "Parallel Execution Batches"
+   - Runs bounded code-review loop (≤3 rounds, msad-code-review agent)
+   - Opens draft PR(s) per repo/package
+   - Returns: test results, coverage, PR links
+
+4. **Parallelization:**
+   - Backend tasks with no plan-level dependencies can have their (Step 2a + Step 2b) processed in parallel
+   - Within a task's plan, Step 5a (conflict-aware batching) determines parallelization of implementation
 
 ### Step 3: Consolidate & Report
 
@@ -207,8 +228,10 @@ See [REVIEW-COMMENT-HANDLING.md](REVIEW-COMMENT-HANDLING.md) and [COMMENT-INTEGR
 
 ## Related Skills
 
-- **`/msad-dev-story`** — orchestrates a single story (smaller scope than epic); use for one-story focus
-- **`/msad-dev-planning`** — generates plan from epic (still used for detailed analysis)
-- **`/msad-dev-execution`** — dispatches agents (called internally by this skill, also standalone)
-- **`/msad-backend-dev`** — implements a single task (dispatched as subagent by this skill)
-- **`/msad-code-review`** — reviews a PR (can be invoked manually for detailed review)
+- **`/msad-dev-epic --scope story`** — same orchestrator, scoped to a single story (smaller scope, faster); use for one-story focus (equivalent to old `/msad-dev-story`)
+- **`/msad-dev-planning`** — invoked internally by this skill (Step 2a) to create/review plans per task; also available standalone for detailed analysis
+- **`/msad-dev-execution`** — invoked internally by this skill (Step 2b) to execute approved plans; also available standalone
+- **`/msad-backend-dev`** — implements a single task; dispatched as subagent by `/msad-dev-execution`
+- **`/msad-code-review`** — reviews PR diffs; invoked as subagent by `/msad-dev-execution`'s bounded code-review loop
+
+**Architecture note:** `/msad-dev-epic` no longer directly dispatches implementation agents. Instead, it loops: per-task planning (via `/msad-dev-planning`) → approval gate → execution (via `/msad-dev-execution`). This ensures every task passes a bounded-reviewed plan before code is written.

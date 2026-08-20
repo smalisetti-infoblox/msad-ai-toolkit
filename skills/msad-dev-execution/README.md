@@ -1,229 +1,74 @@
 # MSAD Developer — Execution
 
-Executes MSAD development plans, including:
-- Implementing new features
-- **Completing partial PRs** (new: gaps identified in planning phase)
-- Running tests and verification
-- Merging code when ready
+**Non-authoritative example document.** See `SKILL.md` for the authoritative process.
+
+Executes MSAD development plans end-to-end:
+- Implements new features per approved plan
+- Runs tests and validation loops (bounded, ≤3 rounds code review)
+- Opens **draft PRs** (never auto-merges — human review gate always applies)
 
 ## Input
 
-Plan file from `/msad-ai-toolkit/specs/msad-dev-plans/YYYY-MM-DD-DDIDNS-XXXXX-WITH-PR-GAPS.md`
+Approved plan file from `/msad-ai-toolkit/specs/msad-dev-plans/YYYY-MM-DD-DDIDNS-XXXXX-plan.md` with `status: approved`.
 
 The plan contains:
-- List of work packages (new implementation vs. existing PRs)
-- For existing PRs: identified gaps + planned fixes
-- Dependencies and merge order
+- Gherkin acceptance criteria (Scenario → Test traceability)
+- Per-repo work packages (additions/modifications/deletions)
+- Parallel Execution Batches (conflict-aware task ordering)
+- Cross-repo dependencies and risk assessment
 
 ## Output
 
-- ✅ Code changes committed to PR branches
-- ✅ Tests passing, coverage verified
-- ✅ PRs merged to main
-- ✅ Execution report with results
+- ✅ Code changes committed per git-commit-discipline (atomic, additions → mods → deletions)
+- ✅ Tests passing locally, coverage ≥80% (or repo threshold)
+- ✅ Bounded code-review loop converged (zero MUST, SHOULD justified)
+- ✅ **Draft PR(s) opened** per repo (ready for human review/merge)
+- ✅ Execution report with results, coverage, test status
 
-## Workflow
+## Workflow (Sketch)
 
-```
-Step 1: Parse Plan
-  ├─ Identify existing PRs with gaps
-  ├─ Identify new implementation tasks
-  └─ Determine execution order
-
-Step 2: Handle Existing PRs (With Gaps)
-  ├─ For each PR with gaps:
-  │  ├─ Checkout PR branch
-  │  ├─ Apply gap fixes (add tests, complete implementation)
-  │  ├─ Run tests locally (make test / dotnet test)
-  │  ├─ Verify coverage meets threshold
-  │  ├─ Commit changes
-  │  ├─ Push to PR branch
-  │  ├─ Wait for CI (checks, linting)
-  │  └─ Merge PR when ready
-  │
-  └─ For each PR without gaps:
-     ├─ Code review (via review agent)
-     ├─ Verify CI passing
-     └─ Merge PR
-
-Step 3: Handle New Implementation (No PR Yet)
-  ├─ For each new task:
-  │  ├─ Create feature branch
-  │  ├─ Implement per plan
-  │  ├─ Run tests
-  │  ├─ Verify coverage
-  │  ├─ Commit with discipline (additions → modifications → deletions)
-  │  ├─ Create PR
-  │  ├─ Wait for CI
-  │  └─ Merge PR
-
-Step 4: Verification & Reporting
-  ├─ Verify all PRs merged
-  ├─ Verify no broken main branch
-  └─ Report completion
-```
-
-## Key Capabilities
-
-### 1. PR Gap Completion
-
-For PRs with identified gaps (e.g., "missing Conditional Forwarder handler tests"):
+**Full authoritative workflow:** See SKILL.md Step 1–6.
 
 ```
-Input: PR 507 with gap "Add handler tests for Conditional Forwarder"
-  ↓
-Checkout PR branch
-  ↓
-Generate test code (based on gap description + existing test patterns)
-  ↓
-Add tests to files specified in plan
-  ↓
-Run: make test (verify compilation + test pass)
-  ↓
-Check coverage: ensure ≥80% (or repo threshold)
-  ↓
-Commit: "DDIDNS-10519: Add Conditional Forwarder handler tests"
-  ↓
-Push to PR branch
-  ↓
-Wait for CI (linting, tests on main)
-  ↓
-Merge when checks pass
+Step 1: Resolve & Verify Plan
+  ├─ Find plan file (by path, Jira ID, or filename)
+  └─ Confirm status: approved (refuse if status: draft)
+
+Step 2: Implement (Parallel Batches)
+  ├─ For each batch in the plan's "Parallel Execution Batches":
+  │  └─ Dispatch msad-backend-dev agents in parallel (within batch)
+  └─ Await all batches to complete
+
+Step 3: Per-Repo Testing & Validation
+  ├─ Run tests per repo (docker-compose, make test)
+  └─ Verify coverage meets threshold
+
+Step 4: Bounded Code Review (≤3 rounds)
+  ├─ Run msad-code-review on the diff
+  ├─ Triage findings: MUST-fix, SHOULD-fix, MAY-fix
+  ├─ Apply fixes (or justify deferred)
+  ├─ Loop until convergence (zero MUST, SHOULD justified)
+  └─ If non-convergence after 3 rounds → surface to user
+
+Step 5: Final Checks
+  └─ Pre-push validation (linting, vet)
+
+Step 5a: Git Commit Discipline
+  └─ Commit per plan: additions commit, mods commit, deletions commit (separate, atomic)
+
+Step 6: PR Creation
+  ├─ For each repo/package → open draft PR via `gh pr create --draft`
+  └─ Include rich template: What/Why/How/Scenario-Traceability/Tests/Future Work/Optimizations/Known Issues
 ```
 
-### 2. Test Generation
+## Key Points
 
-Agent can read existing test patterns and generate new tests:
+**Draft PRs only:** This skill opens draft PRs. It does NOT auto-merge or push to main. Human review and merge is always the final gate.
 
-Example: PR 507 needs Conditional Forwarder handler tests
+**Bounded review loop:** The code-review step (Step 4) uses `references/bounded-review-loop.md` pattern — max 3 rounds, hard stop if non-convergent, escalation to user.
 
-Agent reads existing tests in `pkg/interceptor_handlers_test.go`:
-- Pattern: table-driven test with sqlmock
-- Naming: `Test_<HandlerType>_<Operation>_<Scenario>`
-- Structure: setup → execute → assert
+**Scenario traceability:** Every Gherkin scenario in the plan's acceptance criteria must map to a test in the code (or be explicitly deferred with a linked follow-up ticket).
 
-Generates new tests following same pattern:
-```go
-func Test_DnsConditionalForwarderZoneController_Create_DomainScope(t *testing.T) {
-    // Pattern: copy Auth Zone Create test for Conditional Forwarder
-    // Change: scope = domain (not local)
-    // Assert: scope propagates to collector + DDI write
-}
-```
+**Conflict-aware parallelization:** Dispatch order per "Parallel Execution Batches" in the plan (Step 5a of `/msad-dev-planning`), not ad-hoc.
 
-### 3. Coverage Verification
-
-Agent runs coverage checks and reports:
-
-```bash
-go test -coverprofile=coverage.out ./...
-go tool cover -func=coverage.out | grep -E "total:|<function_name>"
-```
-
-Output:
-```
-Coverage: 92% (was 87%, improved by 5%)
-Threshold: ≥80% ✅ PASS
-```
-
-### 4. CI Integration
-
-Agent waits for CI on PR branch:
-
-```bash
-gh pr checks <PR_NUMBER> --repo <REPO> --watch
-```
-
-When CI passes, agent can merge:
-
-```bash
-gh pr merge <PR_NUMBER> --repo <REPO> --squash
-```
-
-### 5. Git Commit Discipline
-
-Agent follows commit discipline (additions → modifications → deletions):
-
-```bash
-# If PR 507 needs new test file:
-git add pkg/new_test.go
-git commit -m "DDIDNS-10519: Add Conditional Forwarder handler tests
-New files: pkg/test_conditional_forwarder.go
-Pattern: Table-driven test with sqlmock, matching Auth Zone Create tests
-Tests cover: domain scope, forest scope, scope propagation to DDI write"
-
-# If PR 507 modifies existing file:
-git add pkg/interceptor_handlers_test.go
-git commit -m "DDIDNS-10519: Add handler test cases for Conditional Forwarder
-
-Changed: pkg/interceptor_handlers_test.go
-Added 2 test cases: domain scope, forest scope
-Tests verify scope validation and propagation for Conditional Forwarder zones"
-```
-
----
-
-## Implementation Steps
-
-### For Developers Building on This Skill
-
-1. **Read the plan** (identifies PRs + gaps)
-2. **For each PR with gaps:**
-   - `git clone <repo> && git fetch origin`
-   - `git checkout origin/<pr_branch>`
-   - Implement gap fixes (add test files, modify test functions)
-   - `make test` (or equivalent for the repo)
-   - Verify coverage: `go tool cover -func=coverage.out | tail -1`
-   - `git add <files>` + `git commit` (per discipline)
-   - `git push origin <pr_branch>:<pr_branch>`
-   - `gh pr checks <pr_num> --repo <repo> --watch`
-   - `gh pr merge <pr_num> --repo <repo>` when ready
-3. **For each PR without gaps:**
-   - Run code review (via reviewer agent)
-   - Wait for CI
-   - Merge
-
-### For LLM Agents Using This Skill
-
-The skill enables you to:
-
-- **Read execution plan** → understand PR gaps
-- **Checkout PR branches** → work on existing PRs, not main
-- **Generate code** → write tests following existing patterns
-- **Run tests** → verify locally before pushing
-- **Commit intelligently** → follow git discipline
-- **Push & wait for CI** → integrate with GitHub/CI system
-- **Merge PRs** → finalize when ready
-
----
-
-## Safety Guards
-
-The execution skill must ensure:
-
-- ✅ **Never work on main branch** — always checkout PR branches
-- ✅ **Never force-push** — use normal push; if conflict, resolve or ask
-- ✅ **Always run tests locally first** — before pushing to PR
-- ✅ **Verify coverage meets threshold** — don't merge if coverage drops
-- ✅ **Follow commit discipline** — separate additions/modifications/deletions
-- ✅ **Wait for CI to pass** — don't merge until GitHub checks pass
-- ✅ **Explicit merge decision** — ask before merging, or verify readiness
-
----
-
-## Status
-
-This skill is being implemented to handle DDIDNS-7732 Phase 1 execution.
-
-Capabilities being added:
-- [ ] Read execution plan with PR gaps
-- [ ] Checkout PR branches
-- [ ] Generate/add test code
-- [ ] Run tests and verify coverage
-- [ ] Commit with discipline
-- [ ] Push to PR branch
-- [ ] Wait for CI
-- [ ] Merge PRs
-- [ ] Report results
-
-See `lib/` directory for specific implementations.
+**See SKILL.md for full authoritative details.**
