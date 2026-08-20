@@ -1,7 +1,7 @@
 # Handoff: DDIDNS-7732 — Replication Scope Update (DDIDNS-10547 / DDIDNS-10566)
 
-**Date:** 2026-08-20
-**Status:** Blocked on design decisions — do not start `/msad-dev-planning DDIDNS-10547` until these are answered
+**Date:** 2026-08-20 (updated 2026-08-20: Q2 partially resolved, unblocked for Forward-zone first pass)
+**Status:** Unblocked for Forward zones (this pass's actual scope). Auth/Primary remain blocked on Q1/Q3.
 **Owner:** unassigned
 
 ## Context
@@ -16,32 +16,40 @@ DDIDNS-7732 (Microsoft DNS zone creation with replication scope) has been execut
 
 DDIDNS-7732's own description says: *"This story focuses specifically on zone creation and replication scope selection. It does not cover broader lifecycle operations."* Replication scope is currently a **deliberate write-once/immutable field** — enforced in code and documented in `site/content/architecture/service-architecture.md` ("Replication scope cannot be changed after creation"). DDIDNS-10566/10547 implement a DDIDNS-9464-approved exception to that rule.
 
-## Why This Is Blocked
+## Why This Was Blocked (and Why It's Now Unblocked for Forward Zones)
 
-Unlike DDIDNS-10562 (creation), DDIDNS-10547 has **unresolved product/architecture design questions** that code inspection cannot answer — they require a decision from whoever owns the MSAD/AD architecture, not implementation work. Per the toolkit's gating rules, `/msad-dev-planning` will surface these as MUST/Blocking findings in its bounded review; better to resolve them here first so planning isn't wasted.
+Unlike DDIDNS-10562 (creation), DDIDNS-10547 had unresolved product/architecture design questions that code inspection couldn't answer. Q2 has now been **partially resolved by decision** (see below), and it turns out the two questions that remain fully open (Q1, Q3) only matter for **Auth/Primary zones**, which DDIDNS-10547's own task description already scopes *out* of this first pass. Forward zones — the actual scope of this pass — already have a complete, working, rollback-safe agent-side implementation. So planning can proceed now for Forward zones without hitting Q1/Q3 as Blocking findings.
 
-## Open Design Questions
+## Resolved: Legacy Scope Handling (2026-08-20)
 
-### 1. Is "Update" even the right operation model?
+**Decision:** `legacy` replication scope may only ever be **synced in** (via `cq-source-msad`/`cloud.discovery`, the MSAD→DDI read path — see `references/repo-topology.md`'s Direction 2 diagram). It can **never** be set via **creation** (already enforced, DDIDNS-10562) or **update** (new — applies to this task).
 
-Does Microsoft DNS actually support changing an AD-integrated zone's replication scope **in place**, or does changing scope require moving the zone to a different AD directory partition — i.e., a **migration**, not a simple property update?
+**Implementation requirement — keep this a single, easily-changeable point of truth:** the Update-path replication-scope allow-list must exclude `legacy`, exactly mirroring the Create-path allow-list (`local`/`domain`/`forest` only). Concretely:
 
-- If it's a migration: "Update" may be the wrong verb/UX entirely. This affects the API shape, not just the implementation.
-- **Needs verification against real Windows Server DNS/AD behavior** — this is not something that can be determined by reading the DDI/MSAD codebase; it requires either testing against a live AD environment or authoritative Microsoft documentation.
+- In `ddi.cloud.proxy.middleware`, whatever allow-list constant/function gates the new Update-path scope-change logic should reuse or exactly mirror `isValidMSADReplicationScopeForZoneCreate()` (the Create-path validator from DDIDNS-10519/PR #507) — do not introduce a second, independently-maintained list of allowed values. If Create and Update ever need to diverge (e.g., a future exception), that should require an explicit, visible change to a single named constant/list, not scattered literals.
+- Same principle in `ddi.msad.agent`: `IsValidReplicationScopeValue()` (fixed for Create in DDIDNS-10521/PR #617 to exclude `legacy`) should be reused for the Update path's *new-target-value* validation too, if `/msad-dev-planning` determines the Update path needs its own allow-list check distinct from the existing write-once block being relaxed. **Do not confuse this with the existing separate Update allow-list at `DnsZoneRequestHandler.cs:509-518`, which validates the *unchanged* scope on non-scope-changing updates and correctly still includes `legacy`** (needed for idempotent reconciliation of already-synced legacy zones, per DDIDNS-10562's plan) — that one must NOT be touched by this task. This task only concerns validating a *new, user-requested* target scope on a scope-change-on-update request, which must reject `legacy` as a target regardless of the zone's current scope.
 
-### 2. Which scope transitions are allowed?
+**Why "easily changeable":** if this decision changes later (e.g., product decides legacy zones should be re-classifiable to local/domain/forest via update, or vice versa), the fix should be a one-line edit to the shared allow-list, not a hunt through multiple call sites.
 
-E.g., Local→Domain, Domain→Forest, Forest→Domain, Domain→Local, etc.
+## Open Design Questions (Now Scoped to Auth/Primary Only — Not Blocking Forward)
 
-- Are any of these transitions **irreversible**?
-- Does the answer differ by zone type (Auth/Primary vs. Forward)?
+### 1. Is "Update" even the right operation model for Auth/Primary zones?
 
-### 3. Partial-failure / rollback behavior
+Does Microsoft DNS actually support changing an AD-integrated **Primary** zone's replication scope **in place**, or does it require moving the zone to a different AD directory partition — i.e., a **migration**, not a simple property update?
 
-If the scope change succeeds in AD but the DDI database write fails (or vice versa):
+- **Forward zones are unaffected by this question** — the agent's `DnsConditionalForwarderZoneController` already does this successfully via `Set-DnsServerConditionalForwarderZone -ReplicationScope`, proving in-place update works for that zone type.
+- Still needs verification against real Windows Server DNS/AD behavior before Auth/Primary zone support is attempted in a future pass.
 
-- Is rollback required, similar to the pattern the Forward zone's agent controller (`DnsConditionalForwarderZoneController`) **already implements for itself** (rollback to original scope on failure)?
-- Should the same pattern be added to the Auth/Primary zone path once it's unblocked (see below)?
+### 2. Which scope transitions are allowed? — Partially resolved
+
+- **Resolved:** no transition may target `legacy` (see above). This applies to both zone types once each is in scope.
+- **Still open:** are all of Local↔Domain↔Forest transitions allowed, or are some one-way/irreversible? This can be answered during `/msad-dev-planning DDIDNS-10547` as a scoped clarifying question if needed — it's a narrower question now than the original Q2, and may have an obvious answer once the middleware/agent code is inspected for existing transition logic.
+
+### 3. Partial-failure / rollback behavior for Auth/Primary zones
+
+**Forward zones already have this answered** — `DnsConditionalForwarderZoneController` rolls back to the original scope on failure today; DDIDNS-10547 should ensure the middleware-side change for Forward zones doesn't disturb that.
+
+**Still open for Auth/Primary:** whether the same rollback pattern needs to be built when that zone type is unblocked in a future pass (post-Q1).
 
 ## Current Code State (verified 2026-08-20)
 
@@ -58,10 +66,10 @@ If the scope change succeeds in AD but the DDI database write fails (or vice ver
 
 ## Recommended Next Steps
 
-1. **Get Q1–Q3 answered** by whoever owns MSAD/AD architecture decisions (not a coding task — needs either live-AD testing or Microsoft documentation research, plus a product call on allowed transitions).
-2. Once answered, run `/msad-dev-planning DDIDNS-10547` — the plan can now proceed without hitting these as Blocking findings, and can scope the first pass to Forward zones only (per the task's existing scope note) if that's still the agreed approach.
-3. DDIDNS-10548 (Portal UI) stays blocked until DDIDNS-10547's backend contract is settled — do not start UI work in parallel, per the task's own dependency note.
-4. Consider whether Q3's rollback pattern should be extracted into a shared helper now, since Auth/Primary will eventually need the same rollback logic Forward already has — worth deciding at planning time to avoid duplicating it later.
+1. **Run `/msad-dev-planning DDIDNS-10547` now**, scoped to Forward zones only (per the task's existing scope note) — no longer blocked. The plan should explicitly encode the legacy-exclusion decision above using a single shared allow-list, and may surface the Local↔Domain↔Forest transition question (remaining part of Q2) as a scoped clarifying question if the code doesn't already make it obvious.
+2. DDIDNS-10548 (Portal UI) stays blocked until DDIDNS-10547's backend contract is settled — do not start UI work in parallel, per the task's own dependency note.
+3. **Auth/Primary zone support is a separate, still-blocked future pass** — Q1 (in-place vs. migration) and Q3 (rollback for that zone type) remain open and need whoever owns MSAD/AD architecture decisions (live-AD testing or Microsoft documentation research) before that work can be planned.
+4. When Auth/Primary zone support is eventually planned, consider extracting Forward's rollback pattern into a shared helper first, so Auth/Primary can reuse it rather than duplicating it.
 
 ## References
 
