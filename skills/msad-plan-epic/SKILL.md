@@ -249,17 +249,29 @@ Option 3: Review First (Default)
 
 ## Step-by-Step Process
 
-### Step 1: Fetch & Analyze Epic
+### Step 1: Fetch & Analyze Epic (Deduplication Check)
 
 1. Fetch epic via `getJiraIssue(epic_id)` — summary, description, AC, components, status
-2. Extract key information:
+
+2. **DEDUPLICATION CHECK** (prevent duplicate stories/tasks):
+   - Query Jira: `parent = epic_id` — list all linked stories/tasks
+   - For each existing story, record:
+     - Story ID, title, status
+     - Linked tasks (IDs, status, repos)
+   - If stories already exist for this epic:
+     - **Strategy:** Improve/complete existing stories (don't recreate)
+     - Ask user: "This epic already has `<N>` stories. Review existing structure? (Y/N)"
+     - If Yes → show existing story hierarchy, ask which to improve or create new
+     - If No → proceed with creating new structure (will be reviewed for duplicates in Step 7b)
+
+3. Extract key information:
    - **Feature scope:** What's being built? (e.g., "zone creation with replication scopes")
    - **Repos impacted:** Which of the 6 repos are involved? (grep description for repo names)
    - **User-facing changes:** What do users do differently? (e.g., "select scope in form")
    - **Backend changes:** What layers need changes? (API, middleware, collector, agent)
    - **Cross-repo dependencies:** Does middleware change? Does it need collector proto changes?
 
-3. Record findings in analysis section
+4. Record findings in analysis section (note any existing stories found)
 
 ### Step 2–6: Decompose into Functional Areas & Stories
 
@@ -455,10 +467,16 @@ Present the structure plan to the user:
 4. User approval gate (Step 8)
 5. User approves → `status: draft → approved` in plan file
 6. Now: `/msad-plan-epic DDIDNS-7732 --create` is allowed (requires `status: approved`)
-7. Skill uses Atlassian MCP to create stories + tasks per approved plan
-8. Reports: "Created 3 stories (5 tasks) in DDIDNS-7732 per approved structure plan"
+7. **DEDUPLICATION CHECK** (before creating in Jira):
+   - For each story in plan: query Jira for existing story with same name + epic parent
+   - If duplicate found: **REFUSE to create** and show user:
+     - "Story '[name]' already exists as [ID]. To improve it, use `/msad-dev-epic [ID]`"
+     - "To create a new story, rename it in the plan and re-run with --create"
+   - Only create stories that don't already exist
+8. Skill uses Atlassian MCP to create stories + tasks per approved plan
+9. Reports: "Created 3 stories (5 tasks) in DDIDNS-7732 per approved structure plan" or "0 stories (already exist); improved [N] existing"
 
-**Key:** `--create` flag is **gated on `status: approved`**. If you run it before approval, the skill refuses with a message pointing you to the plan file for user approval.
+**Key:** `--create` flag is **gated on `status: approved`** and **deduplication check**. If stories already exist, the skill refuses with guidance on how to improve them instead.
 
 ### Option C: CLI Template for Manual Creation
 

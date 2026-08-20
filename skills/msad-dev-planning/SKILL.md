@@ -55,7 +55,7 @@ Step 8: USER APPROVAL GATE
   └─ Reject → return to step 6
 ```
 
-## Step 1 — Intake
+## Step 1 — Intake (Deduplication Check)
 
 1. Classify the input:
    - **Jira ID matching `^DDIDNS-\d+$`**: proceed to step 2.
@@ -63,11 +63,20 @@ Step 8: USER APPROVAL GATE
    - **Prose with no ticket**: ask the user for a `DDIDNS-XXXXX` ID before proceeding — don't guess.
    - **Anything else**: ask the user which Jira ID to plan against.
 
-2. Detect primary repo mapping via `references/repo-topology.md`:
+2. **DEDUPLICATION CHECK** (prevent duplicate plans):
+   - Search `specs/msad-dev-plans/` for existing plan file: `*-<jira-id>-plan.md`
+   - If found:
+     - Show file path, creation date, and `status` field (draft or approved)
+     - If `status: approved`: "Plan already exists and is approved. Use `/msad-dev-execution <path>` to run it."
+     - If `status: draft`: "Plan already exists (draft). Improve it? Show plan for review. Or create new? (yes/no/show-existing)"
+     - If user says Yes (create new): proceed with new plan file (timestamped suffix distinguishes)
+     - If user says No: reuse existing plan, offer to review/update it
+
+3. Detect primary repo mapping via `references/repo-topology.md`:
    - Service/component mentioned in the task maps to one or more repos.
    - Note all repos involved (may be multi-repo epic).
 
-3. State: *"Step 1 — Intake. Repos: `<list>`, ticket: `<jira-id>`."*
+4. State: *"Step 1 — Intake. Repos: `<list>`, ticket: `<jira-id>`. Existing plan: [none/draft/approved]."*
 
 ## Step 2 — Jira Analysis
 
