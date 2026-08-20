@@ -41,7 +41,7 @@ Add-DnsServerPrimaryZone / Set-DnsServerPrimaryZone
 | **middleware** | `pkg/msad_zone_helper.go:187,200` | `isValidMSADReplicationScopeForZoneCreate()`, `isValidMSADReplicationScopeForStubZone()` — allow-list is `local`/`domain`/`forest` | Correct (mirrors dns.config) |
 | **collector** | `pkg/svc/zones/zones.go` | No validation; passes `ErrorCodeToStatus` mapping but doesn't reject bad scopes | Correct (validation is upstream responsibility) |
 | **proxy** | TBD | TBD | TBD |
-| **agent** | `MSADAgent/Agent/Core/DnsInfoControllers/DnsPrimaryZoneController.cs:~line ~80-110` | **NONE** — passes `replicationScope` straight into PowerShell `-ReplicationScope "{replicationScope}"` with no allow-list check | **DDIDNS-10521 gap** — validation needed |
+| **agent** | `MSADAgent/Agent/Core/RequestHandlers/DnsZoneRequestHandler.cs` — `IsValidCreateDnsZoneRequest()` / `IsValidReplicationScopeValue()` | Allow-list check added for Primary/Forward zone creation (DDIDNS-10521, PR #617); **known drift as of 2026-08-20:** the Create-path allow-list currently includes `legacy` (to mirror Update), but dns.config/middleware reject `legacy` at creation — Create should exclude it. See `specs/msad-dev-plans/2026-08-20-DDIDNS-10562-plan.md` | Fix tracked in DDIDNS-10562's dev plan |
 
 ---
 
@@ -101,9 +101,11 @@ Key service for this epic: **Zones** (methods: Create, Update, Delete, List, Get
 
 ### ddi.msad.agent
 
-- `MSADAgent/Agent/Core/DnsInfoControllers/DnsInfoZoneControllers/DnsPrimaryZoneController.cs` — `Create()` / `Update()` for Primary zones; **no replication-scope validation**
-- `MSADAgent/Agent/Core/DnsInfoControllers/DnsInfoZoneControllers/DnsConditionalForwarderZoneController.cs` — `Create()` / `Update()` for Forward zones; **no replication-scope validation**
+- `MSADAgent/Agent/Core/RequestHandlers/DnsZoneRequestHandler.cs` — `IsValidCreateDnsZoneRequest()`/`IsValidUpdateDnsZoneRequest()`/`IsValidReplicationScopeValue()`: centralized request validation (including replication-scope allow-list, added DDIDNS-10521/PR #617) before dispatch to per-zone-type controllers
+- `MSADAgent/Agent/Core/DnsInfoControllers/DnsInfoZoneControllers/DnsPrimaryZoneController.cs` — `Create()` / `Update()` for Primary zones; validation happens upstream in `DnsZoneRequestHandler`, not here
+- `MSADAgent/Agent/Core/DnsInfoControllers/DnsInfoZoneControllers/DnsConditionalForwarderZoneController.cs` — `Create()` / `Update()` for Forward zones; validation happens upstream in `DnsZoneRequestHandler`, not here
 - `MSADAgent/Agent/Helpers/CommonDnsMethod.cs` — shared helpers (zone-name validation, AD lookup)
+- `MSADAgent/Agent.Tests/UnitTests/RequestHandlersTests/DnsZoneRequestHandlerRoutingTests.cs` — replication-scope allow-list test cases (table-driven `[Theory]`/`[InlineData]`)
 - `MSADAgent/Agent.Tests/` — xUnit unit + integration tests
 
 ---
@@ -423,6 +425,21 @@ If a task scope expands beyond the six core repos, use these methods to find hid
    ```
 
 **Don't assume a repo present under `~/` is a dependency** — confirm it via one of these signals first (go.mod import, proto go_package, or docs-manifest.yaml reference).
+
+---
+
+## Sync / Discovery Repos (MSAD Topology — Reverse Direction)
+
+The six core repos above handle the **DDI → MSAD** direction (create/update/delete zones initiated from the Portal/API). A separate pair of repos handles the **MSAD → DDI** direction: discovering and syncing the state of *existing* Microsoft DNS zones (including ones created directly in AD, outside DDI) back into DDI. These are part of the MSAD topology and may be in scope for tasks about zone discovery, sync reconciliation, or reporting existing zone state (e.g., Legacy-scope zones, which can only ever arrive via sync — they are never creatable through the DDI → MSAD path; see `local path` / creation rules above).
+
+| Repo | Local Path | Stack | Role | Build | Test |
+|---|---|---|---|---|---|
+| **cq-source-msad** | `~/cq-source-msad` | Go | CloudQuery source plugin — fetches zones/records from the MSAD collector service (`msad_collector_endpoint`), including `replication_scope` as reported by the live AD environment (no allow-list validation — reports whatever scope the zone actually has, including `legacy`) | `go build` | `make test` (`go test -timeout 10m ./...`), `make lint` |
+| **cloud.discovery** | `~/cloud.discovery` | Go | Discovers resources from 20+ providers (including MSAD via `cq-source-msad`) and fans out to BloxOne DDI (via the `b1ddi` overlay adapter), IPAM, ClickHouse, Global Search. The MSAD-specific fetch/transform logic lives in `pkg/adapters/overlay/msad/cq_fetchers.go`; the DDI-write side is `pkg/adapters/overlay/b1ddi/` | `make generate` (proto), standard `go build` | `make test` (`lint-resourceMapping` + `unit-test`) |
+
+**Key distinction for replication-scope work:** `cq-source-msad` and `cloud.discovery` are **read-only with respect to replication scope** — they report the scope Microsoft DNS already has (including `legacy`, for zones that predate DDI management or were never migrated). They do not validate or reject values; validation only happens on the **write** path (dns.config, middleware, agent — the six core repos), where `legacy` is correctly rejected at zone **creation** (a user can never create a new `legacy`-scope zone through DDI) but a zone with an existing `legacy` scope can still be synced in and displayed.
+
+**Fork pattern:** Both repos already follow the standard fork setup (`origin` = personal fork, `upstream` = Infoblox-CTO) — see `CLAUDE.md` for the general pattern.
 
 ---
 
