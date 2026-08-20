@@ -17,21 +17,95 @@ This document maps the six-repo MSAD ecosystem, lists build/test/lint commands, 
 
 ---
 
-## Request Flow & Validation Points
+## Request Flow & Validation Points (Both Directions)
+
+Zones/records flow through this ecosystem in **two directions** using **two separate API surfaces** — they only share the collector and below. Write requests never pass through the sync/discovery repos, and sync/discovery never calls the write RPCs. Confirmed by reading the actual RPC definitions and client call sites (not inferred).
 
 ```
-WAPI v3 (dns.config)
-  ↓ [zone create/update]
-Cloud Proxy Middleware (ddi.cloud.proxy.middleware)
-  ↓ [gRPC call]
-MSAD Collector (ddi.msad.collector)
-  ↓ [gRPC call]
-MSAD Connect Proxy (ddi.msadconnect.proxy)
-  ↓ [Windows RPC/LDAP]
-MSAD Agent (ddi.msad.agent)
-  ↓ [PowerShell]
-Add-DnsServerPrimaryZone / Set-DnsServerPrimaryZone
+┌─────────────────────────────────────────────────────────────────────────┐
+│  DIRECTION 1: DDI → MSAD  (write path — create/update/delete)          │
+│  API surface: WAPI v3 (REST) → gRPC Create/Update/Delete RPCs          │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  Portal / WAPI v3 client
+    │  REST: POST/PATCH zone (replication_scope: local|domain|forest)
+    ▼
+  WAPI v3 (ddi.dns.config)                                    ◄── VALIDATION
+    │  pkg/service/application/stub_zone.go
+    │  validateStubZoneReplicationScopeNotLegacy() — rejects `legacy`
+    │  at creation; allows local/domain/forest
+    │  gRPC: Zones.Create / Zones.Update
+    ▼
+  Cloud Proxy Middleware (ddi.cloud.proxy.middleware)          ◄── VALIDATION
+    │  pkg/msad_zone_helper.go
+    │  isValidMSADReplicationScopeForZoneCreate() — mirrors dns.config's
+    │  allow-list (local/domain/forest, rejects `legacy`)
+    │  gRPC: Zones.Create / Zones.Update / Zones.Delete
+    ▼
+  MSAD Collector (ddi.msad.collector)                          — no validation
+    │  pkg/svc/zones/zones.go — ZonesServer.Create/Update/Delete
+    │  passes request through; only maps agent ZONE-00x errors →
+    │  gRPC status via pkg/util/util.go:ErrorCodeToStatus()
+    │  gRPC: MSADMigrateClient (to proxy)
+    ▼
+  MSAD Connect Proxy (ddi.msadconnect.proxy)                    — no validation
+    │  Windows RPC/LDAP bridge; dials the agent
+    ▼
+  MSAD Agent (ddi.msad.agent)                                  ◄── VALIDATION
+    │  MSADAgent/Agent/Core/RequestHandlers/DnsZoneRequestHandler.cs
+    │  IsValidCreateDnsZoneRequest() / IsValidUpdateDnsZoneRequest()
+    │  IsValidReplicationScopeValue() — allow-list check before dispatch
+    │  to per-zone-type controllers (DnsPrimaryZoneController,
+    │  DnsConditionalForwarderZoneController)
+    │  Create: should reject `legacy` (drift as of 2026-08-20, see
+    │  specs/msad-dev-plans/2026-08-20-DDIDNS-10562-plan.md)
+    │  Update: correctly allows `legacy` (write-once/immutability is
+    │  enforced separately in middleware; Update's allow-list is not
+    │  the mechanism that blocks scope changes)
+    ▼
+  PowerShell: Add-DnsServerPrimaryZone -ReplicationScope /
+              Set-DnsServerConditionalForwarderZone -ReplicationScope
+    ▼
+  Microsoft Active Directory (AD-integrated zone, replication scope applied)
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  DIRECTION 2: MSAD → DDI  (sync/discovery path — read-only)            │
+│  API surface: gRPC List RPC (streaming) → CloudQuery → overlay adapter │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  Microsoft Active Directory (zones may have ANY replication scope,
+  including `legacy` — e.g. pre-existing zones never migrated)
+    ▼
+  MSAD Agent (ddi.msad.agent)                                  — no validation
+    │  reports actual zone state (whatever scope AD has)
+    ▼
+  MSAD Connect Proxy (ddi.msadconnect.proxy)                    — pass-through
+    ▼
+  MSAD Collector (ddi.msad.collector)                          — no validation
+    │  pkg/svc/zones/zones.go — ZonesServer.List (streaming RPC)
+    │  gRPC: Zones.List(ListZoneRequest) returns (stream ListZoneResponse)
+    │  Records equivalent: Records.List / Records.Get
+    ▼
+  cq-source-msad (CloudQuery plugin)                            — no validation
+    │  resources/services/dns/zones.go
+    │  calls ZoneClient.List(...) directly against the collector's gRPC
+    │  endpoint (msad_collector_endpoint) — bypasses middleware entirely,
+    │  this is a read-only fan-in, not a write path
+    │  maps ZoneInfo.ReplicationScope → CQ zones table column verbatim
+    ▼
+  cloud.discovery                                               — no validation
+    │  pkg/adapters/overlay/msad/cq_fetchers.go — reads the CQ table,
+    │  maps to provider.ReplicationScope(...)
+    │  pkg/adapters/overlay/b1ddi/ — writes into DDI's
+    │  ExternalProvidersMetadata.msad_config.replication_scope
+    │  (JSONB field, no schema/proto change needed to add scope values)
+    ▼
+  DDI (BloxOne) — zone now visible in Portal with its actual
+  replication scope, including `legacy` if that's what AD reports
 ```
+
+**Why this matters for replication-scope work:** a zone can carry `legacy` scope in DDI *only* via Direction 2 (sync of a pre-existing AD zone). Direction 1 will never produce a `legacy`-scope zone once the Create-path validators are consistent (dns.config and middleware already reject it; the agent fix is tracked in DDIDNS-10562). This is why "legacy scope must be allowed to sync but not be creatable" is not a contradiction — they are two different API surfaces with two different repos, confirmed by reading `cq-source-msad`'s and `cloud.discovery`'s code (no allow-list logic exists on that side at all).
 
 ### Replication-Scope Validation Today
 
