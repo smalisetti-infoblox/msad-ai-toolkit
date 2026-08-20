@@ -532,6 +532,6 @@ No hard limit. For a large epic (6+ stories), still start with `/msad-plan-epic`
 - **[references/git-commit-discipline.md](references/git-commit-discipline.md)** — Atomic commit patterns (additions → modifications → deletions)
 
 **External Links:**
-- **[DDIDNS-7732 Epic](https://infoblox.atlassian.net/browse/DDIDNS-7732)** — The canonical zone creation epic
+- **[DDIDNS-7732 Epic](https://infoblox.atlassian.net/browse/DDIDNS-7732)** — First epic run through this toolkit (Microsoft DNS zone creation with replication scope); used as the worked example throughout this doc, not the toolkit's scope
 - **[architecture-hub](https://github.com/Infoblox-CTO/architecture-hub)** — Specs, contracts, design docs
 - **[Infoblox-CTO GitHub](https://github.com/Infoblox-CTO)** — All 6 canonical repos

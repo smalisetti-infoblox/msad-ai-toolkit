@@ -1,6 +1,6 @@
 # MSAD Repo Topology & Build Reference
 
-This document maps the six-repo ecosystem supporting the DDIDNS-7732 epic (Microsoft DNS zone creation / replication scope), lists build/test/lint commands, and identifies key files where replication-scope validation lives at each layer.
+This document maps the six-repo MSAD ecosystem, lists build/test/lint commands, and identifies key implementation files per repo. It's shared reference material for any MSAD epic/story/task — not scoped to one epic. The "Request Flow & Validation Points" section below uses the replication-scope validators (introduced by DDIDNS-7732, the first epic run through this toolkit) as a worked example of how validation flows through the layers; update it as new validation points are added by later epics.
 
 ## Repo Summary Table
 
